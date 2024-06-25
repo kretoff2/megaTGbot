@@ -15,8 +15,8 @@ bot = testBot
 
 conn = sql.connect('db.sql')
 cur = conn.cursor()
-cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit)')
-cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50))')
+cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class var(6))')
+cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50), rating int)')
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
@@ -45,13 +45,14 @@ def main(message):
         print(el)
         if el[3] == message.chat.id:
             ok = False
+            print(el)
             if el[6] != 0:
                 ccc = False
     if ccc == True:
         if ok == True:
             conn = sql.connect('db.sql')
             cur = conn.cursor()
-            cur.execute('INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep) VALUES ("%s", "%s", "%s", "%s", "%s")' % (message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0))
+            cur.execute('INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
             conn.commit()
             cur.close()
             conn.close()
@@ -63,6 +64,26 @@ def main(message):
         markup.row(btnRus)
         markup.row(btn1488)
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
+    if ccc==False and ok == False:
+        Go_start(message)
+def Go_start(message):
+    markup = types.ReplyKeyboardMarkup()
+    btn1 = types.KeyboardButton("Личный кабинет🪪")
+    btn2 = types.KeyboardButton("Настройки⚙️")
+    markup.row(btn1, btn2)
+    bot.send_message(message.chat.id, "Привет, я твой телеграм бот помошник. Что ты хочешь узнать?", reply_markup=markup)
+def my_room(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM users WHERE chatID = "%s"'%(message.chat.id))
+    info = cur.fetchone()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
+    markup.add(btn)
+    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+    bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
 @bot.message_handler(commands=['op'])
 def main(message):
@@ -116,6 +137,13 @@ def addAdmin(message):
   cur.close()
   conn.close()
 
+@bot.message_handler()
+def main(message):
+    if message.text == "Личный кабинет🪪":
+        my_room(message)
+    elif message.text == "Настройки⚙️":
+        bot.send_message(message.chat.id, "Раздел находится в разработке")
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     global data
@@ -148,10 +176,37 @@ def callback(call):
         cur.close()
         conn.close()
         bot.send_message(call.message.chat.id, "Вы успешно зарегистрированы")
+        Go_start(call.message)
     elif callRazd[0] == "fourth_register_step_else":
         data["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
         data["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
         bot.register_next_step_handler(call.message, else_school)
+    elif callRazd[0] == "school_info":
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute(f"SELECT * FROM schools WHERE schoolID = ?", (int(callRazd[1]),))
+        info = cur.fetchone()
+        if info == None:
+            return
+        cur.close()
+        conn.close()
+        infoText = f'ID: {info[1]}\n\nСтрана: {info[2]}\nОбласть: {info[3]}\nГород/деревня: {info[4]}\nШкола: {info[5]}\nРэйтинг: {info[6]}'
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Назад", callback_data="back_to_my_room")
+        markup.add(btn)
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
+    elif callRazd[0] == "back_to_my_room":
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (call.message.chat.id))
+        info = cur.fetchone()
+        cur.close()
+        conn.close()
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
+        markup.add(btn)
+        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
 
 
 def send_vibor_obl(call):
@@ -227,7 +282,7 @@ def send_vibor_school(message):
         if str(el[0]) != "None":
             btn = types.InlineKeyboardButton(str(el[0]), callback_data=f"fourth_register_step:{el[0]}")
             markup.add(btn)
-    btn = types.InlineKeyboardButton("Друая", callback_data=f"fourth_register_step_else")
+    btn = types.InlineKeyboardButton("Другая", callback_data=f"fourth_register_step_else")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери школу',reply_markup=markup)
 
@@ -236,9 +291,9 @@ def else_school(message):
     cur = conn.cursor()
     cur.execute('SELECT school FROM schools')
     schols = cur.fetchall()
-    cur.execute('INSERT INTO schools (contry, obl, sity, school, schoolID) VALUES ("%s", "%s", "%s", "%s", "%s")' % (
-    data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"], data["usersData"][f"{message.chat.id}"]["sity"], message.text, len(schols)))
-    cur.execute(f'UPDATE users SET schoolID = {len(schols)-1} WHERE chatID = {message.chat.id}')
+    cur.execute('INSERT INTO schools (contry, obl, sity, school, schoolID, rating) VALUES ("%s", "%s", "%s", "%s", "%s", "%s")' % (
+    data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"], data["usersData"][f"{message.chat.id}"]["sity"], message.text, len(schols),0))
+    cur.execute(f'UPDATE users SET schoolID = {len(schols)} WHERE chatID = {message.chat.id}')
     cur.execute(f'UPDATE users SET autorizationStep = {1} WHERE chatID = {message.chat.id}')
     conn.commit()
     cur.close()
@@ -246,5 +301,6 @@ def else_school(message):
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, data["usersData"][str(message.chat.id)]["MessageID"])
     bot.send_message(message.chat.id,"Вы успешно зарегистрированы, для начала работы с ботом пропишите /start")
+    Go_start(message)
 
 bot.polling(none_stop=True)
