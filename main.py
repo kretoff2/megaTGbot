@@ -19,6 +19,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key
 cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50), rating int)')
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
+cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
@@ -30,6 +31,38 @@ data = {
 
     }
 }
+def my_markup():
+    markup = types.ReplyKeyboardMarkup()
+    btn1 = types.KeyboardButton("Личный кабинет 🪪")
+    btn2 = types.KeyboardButton("Настройки ⚙️")
+    markup.row(btn1, btn2)
+    return markup
+@bot.message_handler(commands=['allMessage'])
+def main(message):
+  if (message.chat.id != 1917247858):
+    bot.send_message(message.chat.id, "Вам не доступна эта команда")
+    return
+  markup = types.ReplyKeyboardMarkup(row_width=1)
+  btn = types.KeyboardButton("Отмена")
+  markup.add(btn)
+  bot.send_message(message.chat.id,'Введите сообщение которое отправится всем пользователям бота, для отмены напишите "отмена"', reply_markup=markup)
+  bot.register_next_step_handler(message, allMesage)
+
+def allMesage(message):
+  if message.text.strip().lower() == "отмена":
+    bot.send_message(message.chat.id, "отмена прошла успешно")
+    return
+  conn = sql.connect('db.sql')
+  cur = conn.cursor()
+
+  cur.execute('SELECT * FROM users')
+  users = cur.fetchall()
+
+  cur.close()
+  conn.close()
+
+  for el in users:
+    bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
 @bot.message_handler(commands=['start'])
 def main(message):
     data["usersData"][str(message.chat.id)] = {}
@@ -67,11 +100,7 @@ def main(message):
     if ccc==False and ok == False:
         Go_start(message)
 def Go_start(message):
-    markup = types.ReplyKeyboardMarkup()
-    btn1 = types.KeyboardButton("Личный кабинет🪪")
-    btn2 = types.KeyboardButton("Настройки⚙️")
-    markup.row(btn1, btn2)
-    bot.send_message(message.chat.id, "Привет, я твой телеграм бот помошник. Что ты хочешь узнать?", reply_markup=markup)
+    bot.send_message(message.chat.id, "Привет, я твой телеграм бот помошник. Что ты хочешь узнать?", reply_markup=my_markup())
 def my_room(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
@@ -82,7 +111,10 @@ def my_room(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
     markup.add(btn)
-    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+    if (info[13] == None):
+        btn = types.InlineKeyboardButton("Выбрать класс", callback_data=f"class_vibor")
+        markup.add(btn)
+    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
 @bot.message_handler(commands=['op'])
@@ -139,9 +171,9 @@ def addAdmin(message):
 
 @bot.message_handler()
 def main(message):
-    if message.text == "Личный кабинет🪪":
+    if message.text == "Личный кабинет 🪪":
         my_room(message)
-    elif message.text == "Настройки⚙️":
+    elif message.text == "Настройки ⚙️":
         bot.send_message(message.chat.id, "Раздел находится в разработке")
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -193,7 +225,8 @@ def callback(call):
         infoText = f'ID: {info[1]}\n\nСтрана: {info[2]}\nОбласть: {info[3]}\nГород/деревня: {info[4]}\nШкола: {info[5]}\nРэйтинг: {info[6]}'
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Назад", callback_data="back_to_my_room")
-        markup.add(btn)
+        btn1 = types.InlineKeyboardButton("Изменить класс", callback_data="class_vibor")
+        markup.add(btn, btn1)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "back_to_my_room":
         conn = sql.connect('db.sql')
@@ -205,9 +238,30 @@ def callback(call):
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
         markup.add(btn)
-        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
-
+    elif callRazd[0] == "class_vibor":
+        markup = types.InlineKeyboardMarkup()
+        i = 0
+        for i in range(0,11):
+            i+=1
+            btn = types.InlineKeyboardButton(str(i), callback_data=f"set_class:{i}")
+            markup.add(btn)
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери класс",reply_markup=markup)
+    elif callRazd[0] == "set_class":
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute('UPDATE users SET class = ? WHERE chatID = ?', (callRazd[1], call.message.chat.id))
+        conn.commit()
+        cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (call.message.chat.id))
+        info = cur.fetchone()
+        cur.close()
+        conn.close()
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
+        markup.add(btn)
+        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
 
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
