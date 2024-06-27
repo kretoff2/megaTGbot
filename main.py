@@ -23,19 +23,34 @@ cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key,
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
+BOT_NICKNAME = "Test_7a_bot"
+
 conn.commit()
 cur.close()
 conn.close()
 data = {
     "usersData":{
 
+    },
+    "education":{
+
     }
 }
+lessonsData = {}
+if not os.path.exists('./data.json'):
+    with open('data.json', 'w') as f:
+        json.dump(data, f)
+with open('data.json', 'r') as f:
+    data = json.load(f)
+with open('lessons.json', 'r') as f:
+    lessonsData = json.load(f)
 def my_markup():
     markup = types.ReplyKeyboardMarkup()
     btn1 = types.KeyboardButton("Личный кабинет 🪪")
     btn2 = types.KeyboardButton("Настройки ⚙️")
     markup.row(btn1, btn2)
+    btn = types.KeyboardButton("Обучение 📖")
+    markup.add(btn)
     return markup
 @bot.message_handler(commands=['allMessage'])
 def main(message):
@@ -65,7 +80,17 @@ def allMesage(message):
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
 @bot.message_handler(commands=['start'])
 def main(message):
-    data["usersData"][str(message.chat.id)] = {}
+    i = False
+    for users in data["usersData"]:
+        if users == message.chat.id:
+            i = True
+    if i == False:
+        data["usersData"][str(message.chat.id)] = {}
+        data["usersData"][str(message.chat.id)]["invited"] = {}
+        data["usersData"][str(message.chat.id)]["invitedCol"] = 0
+        data["usersData"][str(message.chat.id)]["inviter"] = None
+        data["education"][str(message.chat.id)] = {}
+        save_data()
     conn = sql.connect('db.sql')
     cur = conn.cursor()
     cur.execute('SELECT * FROM users')
@@ -75,10 +100,8 @@ def main(message):
     ok = True
     ccc = True
     for el in users:
-        print(el)
         if el[3] == message.chat.id:
             ok = False
-            print(el)
             if el[6] != 0:
                 ccc = False
     if ccc == True:
@@ -89,6 +112,14 @@ def main(message):
             conn.commit()
             cur.close()
             conn.close()
+            start_command = message.text
+            refer_id = str(start_command[7:])
+            if refer_id != "" and refer_id != str(message.chat.id):
+                data["usersData"][str(message.chat.id)]["inviter"] = int(refer_id)
+                data["usersData"][str(refer_id)]["invitedCol"]+=1
+                data["usersData"][str(message.chat.id)]["invited"][str(data["usersData"][str(refer_id)]["invitedCol"])] = message.chat.id
+                save_data()
+                bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -99,8 +130,27 @@ def main(message):
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
     if ccc==False and ok == False:
         Go_start(message)
+def go_education(message):
+    i = False
+    for users in data["education"]:
+        if users == message.chat.id:
+            i = True
+    if i == False or data['education'][str(message.chat.id)] == {}:
+        data['education'][str(message.chat.id)]['completed_lesson'] = 0
+        data['education'][str(message.chat.id)]['completed_tests'] = 0
+        data['education'][str(message.chat.id)]['completed_courses'] = 0
+        data['education'][str(message.chat.id)]['GPA'] = 0
+        data['education'][str(message.chat.id)]['problems_solved'] = 0
+        data['education'][str(message.chat.id)]['decided_correctly'] = 0
+        save_data()
+    markup = types.InlineKeyboardMarkup()
+    text = f"Привет {message.from_user.first_name}, давай начем обучение.\n\nТы прошел(а) {data['education'][str(message.chat.id)]['completed_lesson']} уроков"
+    bot.send_message(message.chat.id, text, reply_markup=markup)
 def Go_start(message):
-    bot.send_message(message.chat.id, "Привет, я твой телеграм бот помошник. Что ты хочешь узнать?", reply_markup=my_markup())
+    bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
+def save_data():
+    with open('data.json', 'w') as f:
+        json.dump(data, f)
 def my_room(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
@@ -111,10 +161,12 @@ def my_room(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Пригласить друга", callback_data="invite_frend")
+    markup.add(btn)
     if (info[13] == None):
         btn = types.InlineKeyboardButton("Выбрать класс", callback_data=f"class_vibor")
         markup.add(btn)
-    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
 @bot.message_handler(commands=['op'])
@@ -134,7 +186,7 @@ def main(message):
   bot.register_next_step_handler(message, delAdmin)
 
 def delAdmin(message):
-  conn = sqlite3.connect('bd.sql')
+  conn = sql.connect('bd.sql')
   cur = conn.cursor()
   cur.execute('SELECT * FROM admins')
   cur.execute('DELETE FROM admins WHERE name = "%s"' % (message.text.strip()))
@@ -146,7 +198,7 @@ def addAdmin(message):
   if (message.text.strip().lower() == 'отмена'):
     bot.send_message(message.chat.id, 'Отменено')
     return
-  conn = sqlite3.connect('bd.sql')
+  conn = sql.connect('bd.sql')
   cur = conn.cursor()
 
   cur.execute('SELECT * FROM users')
@@ -175,6 +227,8 @@ def main(message):
         my_room(message)
     elif message.text == "Настройки ⚙️":
         bot.send_message(message.chat.id, "Раздел находится в разработке")
+    elif message.text == "Обучение 📖":
+        go_education(message)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -238,7 +292,9 @@ def callback(call):
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
         markup.add(btn)
-        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+        btn = types.InlineKeyboardButton("Пригласить друга", callback_data="invite_frend")
+        markup.add(btn)
+        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "class_vibor":
         markup = types.InlineKeyboardMarkup()
@@ -260,8 +316,12 @@ def callback(call):
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
         markup.add(btn)
-        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n"
+        btn = types.InlineKeyboardButton("Пригласить друга", callback_data="invite_frend")
+        markup.add(btn)
+        infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
+    elif callRazd[0] == "invite_frend":
+        bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
 
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
