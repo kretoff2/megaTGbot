@@ -23,7 +23,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key,
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
-BOT_NICKNAME = "Test_7a_bot"
+BOT_NICKNAME = "K_gymnasium_7a_bot"
 
 conn.commit()
 cur.close()
@@ -138,17 +138,81 @@ def go_education(message):
     if i == False or data['education'][str(message.chat.id)] == {}:
         data['education'][str(message.chat.id)]['completed_lesson'] = 0
         data['education'][str(message.chat.id)]['completed_tests'] = 0
+        data['education'][str(message.chat.id)]['my_courses'] = {}
         data['education'][str(message.chat.id)]['completed_courses'] = 0
         data['education'][str(message.chat.id)]['GPA'] = 0
         data['education'][str(message.chat.id)]['problems_solved'] = 0
         data['education'][str(message.chat.id)]['decided_correctly'] = 0
         save_data()
     markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Мои курсы", callback_data="my_courses")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Уроки", callback_data="lessons_list")
+    btn1 = types.InlineKeyboardButton("Курсы", callback_data="courses_list")
+    markup.add(btn, btn1)
+    btn = types.InlineKeyboardButton("Тесты", callback_data="tests_list")
+    btn1 = types.InlineKeyboardButton("Шпаргалки", callback_data="cheat_sheets_list")
+    markup.add(btn, btn1)
     text = f"Привет {message.from_user.first_name}, давай начнем обучение.\n\nТы прошел(а):\n{data['education'][str(message.chat.id)]['completed_lesson']} уроков" \
            f"\n{data['education'][str(message.chat.id)]['completed_courses']} учебных курсов\n{data['education'][str(message.chat.id)]['completed_tests']} тестов\n" \
            f"\nСредний балл: {data['education'][str(message.chat.id)]['GPA']}\n\nРешено задач: {data['education'][str(message.chat.id)]['problems_solved']}" \
            f"\nРешено правильно: {data['education'][str(message.chat.id)]['decided_correctly']}"
     bot.send_message(message.chat.id, text, reply_markup=markup)
+def my_courses(message):
+    info = f"Вы прошли {data['education'][str(message.chat.id)]['completed_courses']} учебных курсов"
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Пройденные курсы", callback_data="completed_courses")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+def completed_courses(message):
+    temp = data['education'][str(message.chat.id)]['my_courses']
+    info = "Пройденныйе курсы:\n"
+    for el in lessonsData['courses']:
+        i = 0
+        for i in range(0, data['education'][str(message.chat.id)]['completed_courses']):
+            if (el[0] == temp[i]):
+                info += lessonsData["courses"][i]["name"] + "\n"
+            i += 1
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="my_courses")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+def courses_list(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    for el in lessonsData['courses']:
+        btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери курс", reply_markup=markup)
+
+def lessons_list(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    for el in lessonsData['lessons']:
+        btn = types.InlineKeyboardButton(lessonsData['lessons'][el]['name'], callback_data=f"lesson:{el}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок", reply_markup=markup)
+def tests_list(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    for el in lessonsData['tests']:
+        btn = types.InlineKeyboardButton(lessonsData['tests'][el]['name'], callback_data=f"test:{el}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок", reply_markup=markup)
+def cheat_sheets_list(message):
+    pass
+def start_course(message, courseID):
+    pass
+def start_lesson(message, lessonID):
+    pass
+def start_test(message, testID):
+    pass
+def sen_cheat_sheets(message, cheat_sheetsID)
 def Go_start(message):
     bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
 def save_data():
@@ -348,6 +412,27 @@ def callback(call):
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "invite_frend":
         bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
+    elif callRazd[0] == "my_courses":
+        my_courses(call.message)
+    elif callRazd[0] == "lessons_list":
+        lessons_list(call.message)
+    elif callRazd[0] == "courses_list":
+        courses_list(call.message)
+    elif callRazd[0] == "tests_list":
+        tests_list(call.message)
+    elif callRazd[0] == "cheat_sheets_list":
+        cheat_sheets_list(call.message)
+    elif callRazd[0] == "completed_courses":
+        completed_courses(call.message)
+    elif callRazd[0] == "education":
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+        go_education(call.message)
+    elif callRazd[0] == "course":
+        start_course(call.message, callRazd[1])
+    elif callRazd[0] == "lesson":
+        start_lesson(call.message, callRazd[1])
+    elif callRazd[0] == "test":
+        start_test(call.message, callRazd[1])
 
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
