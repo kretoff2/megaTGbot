@@ -144,7 +144,10 @@ def go_education(message):
         data['education'][str(message.chat.id)]['decided_correctly'] = 0
         save_data()
     markup = types.InlineKeyboardMarkup()
-    text = f"Привет {message.from_user.first_name}, давай начем обучение.\n\nТы прошел(а) {data['education'][str(message.chat.id)]['completed_lesson']} уроков"
+    text = f"Привет {message.from_user.first_name}, давай начнем обучение.\n\nТы прошел(а):\n{data['education'][str(message.chat.id)]['completed_lesson']} уроков" \
+           f"\n{data['education'][str(message.chat.id)]['completed_courses']} учебных курсов\n{data['education'][str(message.chat.id)]['completed_tests']} тестов\n" \
+           f"\nСредний балл: {data['education'][str(message.chat.id)]['GPA']}\n\nРешено задач: {data['education'][str(message.chat.id)]['problems_solved']}" \
+           f"\nРешено правильно: {data['education'][str(message.chat.id)]['decided_correctly']}"
     bot.send_message(message.chat.id, text, reply_markup=markup)
 def Go_start(message):
     bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
@@ -308,6 +311,29 @@ def callback(call):
         conn = sql.connect('db.sql')
         cur = conn.cursor()
         cur.execute('UPDATE users SET class = ? WHERE chatID = ?', (callRazd[1], call.message.chat.id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('"А"', callback_data="set_class_letter:А")
+        btn2 = types.InlineKeyboardButton('"Б"', callback_data="set_class_letter:Б")
+        btn3 = types.InlineKeyboardButton('"В"', callback_data="set_class_letter:В")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Г"', callback_data="set_class_letter:Г")
+        btn2 = types.InlineKeyboardButton('"Д"', callback_data="set_class_letter:Д")
+        btn3 = types.InlineKeyboardButton('"Е"', callback_data="set_class_letter:Е")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Ж"', callback_data="set_class_letter:Ж")
+        btn2 = types.InlineKeyboardButton('"З"', callback_data="set_class_letter:З")
+        btn3 = types.InlineKeyboardButton('"И"', callback_data="set_class_letter:И")
+        markup.add(btn1, btn2, btn3)
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери класс", reply_markup=markup)
+    elif callRazd[0] == "set_class_letter":
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute('SELECT class FROM users WHERE chatID = ?', (call.message.chat.id,))
+        temp = cur.fetchone()
+        cur.execute('UPDATE users SET class = ? WHERE chatID = ?', (f'{temp[0]}"{callRazd[1]}"', call.message.chat.id))
         conn.commit()
         cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (call.message.chat.id))
         info = cur.fetchone()
