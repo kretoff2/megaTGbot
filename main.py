@@ -40,9 +40,9 @@ lessonsData = {}
 if not os.path.exists('./data.json'):
     with open('data.json', 'w') as f:
         json.dump(data, f)
-with open('data.json', 'r') as f:
+with open('data.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
-with open('lessons.json', 'r') as f:
+with open('lessons.json', 'r', encoding='utf-8') as f:
     lessonsData = json.load(f)
 def my_markup():
     markup = types.ReplyKeyboardMarkup()
@@ -205,14 +205,32 @@ def tests_list(message):
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок", reply_markup=markup)
 def cheat_sheets_list(message):
-    pass
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    for el in lessonsData["subjects"]:
+        btn = types.InlineKeyboardButton(lessonsData["subjects"][el], callback_data=f"sen_cheat_sheets_list:{lessonsData['subjects'][el]}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет", reply_markup=markup)
 def start_course(message, courseID):
     pass
 def start_lesson(message, lessonID):
     pass
 def start_test(message, testID):
     pass
-def sen_cheat_sheets(message, cheat_sheetsID)
+def sen_cheat_sheets_list(message, subject):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="cheat_sheets_list")
+    markup.add(btn)
+    for el in lessonsData["cheat_sheets"]:
+        btn = types.InlineKeyboardButton(lessonsData['cheat_sheets'][el]['name'], callback_data=f"sen_cheat_sheets:{el}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Шпаргалки по предмету {subject}", reply_markup=markup)
+def sen_cheat_sheets(message, cheat_sheetsID):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"sen_cheat_sheets_list:{lessonsData['cheat_sheets'][cheat_sheetsID]['subject']}")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=lessonsData['cheat_sheets'][cheat_sheetsID]["text"], reply_markup=markup)
 def Go_start(message):
     bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
 def save_data():
@@ -433,6 +451,10 @@ def callback(call):
         start_lesson(call.message, callRazd[1])
     elif callRazd[0] == "test":
         start_test(call.message, callRazd[1])
+    elif callRazd[0] == "sen_cheat_sheets_list":
+        sen_cheat_sheets_list(call.message, callRazd[1])
+    elif callRazd[0] == "sen_cheat_sheets":
+        sen_cheat_sheets(call.message, callRazd[1])
 
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
