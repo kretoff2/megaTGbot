@@ -51,6 +51,8 @@ def my_markup():
     markup.row(btn1, btn2)
     btn = types.KeyboardButton("Обучение 📖")
     markup.add(btn)
+    btn = types.KeyboardButton("Школа 🏫")
+    markup.add(btn)
     return markup
 @bot.message_handler(commands=['allMessage'])
 def main(message):
@@ -189,7 +191,7 @@ def main(message):
   bot.register_next_step_handler(message, delAdmin)
 
 def delAdmin(message):
-  conn = sql.connect('bd.sql')
+  conn = sql.connect('db.sql')
   cur = conn.cursor()
   cur.execute('SELECT * FROM admins')
   cur.execute('DELETE FROM admins WHERE name = "%s"' % (message.text.strip()))
@@ -201,7 +203,7 @@ def addAdmin(message):
   if (message.text.strip().lower() == 'отмена'):
     bot.send_message(message.chat.id, 'Отменено')
     return
-  conn = sql.connect('bd.sql')
+  conn = sql.connect('db.sql')
   cur = conn.cursor()
 
   cur.execute('SELECT * FROM users')
@@ -224,6 +226,35 @@ def addAdmin(message):
   cur.close()
   conn.close()
 
+def school_info(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
+    schoolID = cur.fetchone()
+    cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
+    my_class = cur.fetchone()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+def rasp(message, schoolID, scholl_class, id):
+    if id == 0:
+        v = datetime.today().weekday()
+    elif id == 1:
+        v = datetime.today().weekday()+1
+    if id == 2:
+        return
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute("")
+def create_new_scholl_db(schoolID):
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('CREATE TABLE IF NOT EXISTS rasp (id int auto_increment primary key, class varchar(6), day int, lesson1 varchar(25), lesson2 varchar(25), lesson3 varchar(25), lesson4 varchar(25), lesson5 varchar(25), lesson6 varchar(25), lesson7 varchar(25), lesson8 varchar(25), lesson9 varchar(25), lesson10 varchar(25))')
+    cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int, class varchar(6))')
+    cur.execute('CREATE TABLE IF NOT EXISTS dz (id int auto_increment primary key, date varchar(50), predmet varchar(25), dz varchar(1000), dzId int, class varchar(25))')
+    conn.commit()
+    cur.close()
+    conn.close()
 @bot.message_handler()
 def main(message):
     if message.text == "Личный кабинет 🪪":
@@ -232,6 +263,8 @@ def main(message):
         bot.send_message(message.chat.id, "Раздел находится в разработке")
     elif message.text == "Обучение 📖":
         go_education(message)
+    elif message.text == "Школа 🏫":
+        school_info(message)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -441,6 +474,7 @@ def else_school(message):
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, data["usersData"][str(message.chat.id)]["MessageID"])
     bot.send_message(message.chat.id,"Вы успешно зарегистрированы, для начала работы с ботом пропишите /start")
+    create_new_scholl_db(len(schols))
     Go_start(message)
 
 bot.polling(none_stop=True)
