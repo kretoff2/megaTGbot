@@ -230,23 +230,104 @@ def school_info(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
-    schoolID = cur.fetchone()
+    temp = cur.fetchone()
+    schoolID = temp[0]
     cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
-    my_class = cur.fetchone()
+    temp = cur.fetchone()
+    my_class = temp[0]
     cur.close()
     conn.close()
     markup = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton("Расписание на сегодня", callback_data=f"rasp:{schoolID}:{my_class}:0")
+    btn2 = types.InlineKeyboardButton("Расписание на завтра", callback_data=f"rasp:{schoolID}:{my_class}:1")
+    markup.add(btn1, btn2)
+    btn = types.InlineKeyboardButton("Расписание на неделю", callback_data=f"rasp:{schoolID}:{my_class}:2")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Новости", callback_data=f"news:{schoolID}:{my_class}")
+    markup.add(btn)
+    btn1 = types.InlineKeyboardButton("Дз", callback_data=f"homeTask:{schoolID}:{my_class}:0")
+    btn2 = types.InlineKeyboardButton("ГДЗ", callback_data="GDZ")
+    markup.add(btn1, btn2)
+    bot.send_message(message.chat.id, "Что ты хочешь узнать?", reply_markup=markup)
 def rasp(message, schoolID, scholl_class, id):
-    if id == 0:
+    v = ""
+    if id == "0":
         v = datetime.today().weekday()
-    elif id == 1:
+    elif id == "1":
         v = datetime.today().weekday()+1
-    if id == 2:
+    if id == "2":
         return
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
-    cur.execute("")
+    cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, v))
+    rasp = cur.fetchone()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
+    markup.add(btn)
+    if rasp == None:
+        btn = types.InlineKeyboardButton("Добавить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}")
+        markup.add(btn)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Расписание не задано", reply_markup=markup)
+def add_rasp_list(message, schoolID, school_class):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"rasp:{schoolID}:{school_class}:2")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Понедельник", callback_data=f"add_dz:{schoolID}:{school_class}:0:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Вторник", callback_data=f"add_dz:{schoolID}:{school_class}:1:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Среда", callback_data=f"add_dz:{schoolID}:{school_class}:2:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Четверг", callback_data=f"add_dz:{schoolID}:{school_class}:3:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Пятница", callback_data=f"add_dz:{schoolID}:{school_class}:4:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Суббота", callback_data=f"add_dz:{schoolID}:{school_class}:5:1")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Воскресение", callback_data=f"add_dz:{schoolID}:{school_class}:6:1")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="На какой день недели вы хотите ввести рассписание", reply_markup=markup)
+def add_dz(message, schoolID, school_class, day = None, number = None, subject = None):
+    subjects = {"Русский язык", "Белорусский язык", "Иностранный язык", "Математика", "Алгебра", "Геометрия",
+                "Русская литература", "Белорусская литература", "Человек и мир", "Всемирная истроия",
+                "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
+                "Химия", "Обществоведение", "Допризывная подготовка", "Медицинская подготовка", "Черчение",
+                "Астрономия"}
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
+    markup.add(btn)
+    if subject == None:
+        for el in subjects:
+            btn = types.InlineKeyboardButton(el, callback_data=f"add_dz:{schoolID}:{school_class}:{day}:{number}:{el}")
+            markup.add(btn)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Выбери {number} урок", reply_markup=markup)
+        return
+    conn = sql.connect(f"./sqls/{schoolID}.sql")
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM rasp WHERE class = ? AND day = ?', (school_class, day))
+    temp = cur.fetchone()
+    if temp == None:
+        cur.execute('INSERT INTO rasp (class, day, lesson1) VALUES (?, ?, ?)', (school_class, day, subject))
+    else:
+        cur.execute(f'UPDATE rasp SET lesson{number} = ? WHERE class = ? AND day = ?', (subject, school_class, day))
+    conn.commit()
+    cur.close()
+    conn.close()
+    if number == 10:
+        rasp(message, schoolID, school_class, 2)
+        return
+    for el in subjects:
+        btn = types.InlineKeyboardButton(el, callback_data=f"add_dz:{schoolID}:{school_class}:{day}:{int(number)+1}:{el}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Выбери {int(number)+1} урок", reply_markup=markup)
+def see_news(message, schoolID, school_class):
+    pass
+def see_dz(message, schoolID, school_class, id):
+    pass
 def create_new_scholl_db(schoolID):
+    print(schoolID)
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
     cur.execute('CREATE TABLE IF NOT EXISTS rasp (id int auto_increment primary key, class varchar(6), day int, lesson1 varchar(25), lesson2 varchar(25), lesson3 varchar(25), lesson4 varchar(25), lesson5 varchar(25), lesson6 varchar(25), lesson7 varchar(25), lesson8 varchar(25), lesson9 varchar(25), lesson10 varchar(25))')
@@ -381,7 +462,23 @@ def callback(call):
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "invite_frend":
         bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
-
+    elif callRazd[0] == "rasp":
+        rasp(call.message, callRazd[1], callRazd[2], callRazd[3])
+    elif callRazd[0] == "news":
+        see_news(call.message, callRazd[1], callRazd[2])
+    elif callRazd[0] == "homeTask":
+        see_dz(call.message, callRazd[1], callRazd[2], callRazd[3])
+    elif callRazd[0] == "school_infoo":
+        school_info(call.message)
+    elif callRazd[0] == "add_rasp_list":
+        add_rasp_list(call.message, callRazd[1], callRazd[2])
+    elif callRazd[0] == "add_dz":
+        if len(callRazd)==4:
+            add_dz(call.message, callRazd[1], callRazd[2], callRazd[3])
+        elif len(callRazd)==5:
+            add_dz(call.message, callRazd[1], callRazd[2], callRazd[3], callRazd[4])
+        elif len(callRazd)==6:
+            add_dz(call.message, callRazd[1], callRazd[2], callRazd[3], callRazd[4], callRazd[5])
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
 
