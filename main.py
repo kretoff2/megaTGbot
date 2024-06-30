@@ -3,11 +3,11 @@ from telebot import types
 import sqlite3 as sql
 import datetime
 from datetime import *
-import time
 import random
 import requests
 import os
 import json
+import array
 
 testBot = telebot.TeleBot('6764297608:AAEx5Eqbvh5BMTTbAMV0FVRM5B7tqObZYmU')
 realBot = telebot.TeleBot("6468345657:AAFY4m6lYkktI8ZecWW-5EfChyT0aOHWWW8")
@@ -250,26 +250,57 @@ def school_info(message):
     markup.add(btn1, btn2)
     bot.send_message(message.chat.id, "Что ты хочешь узнать?", reply_markup=markup)
 def rasp(message, schoolID, scholl_class, id):
-    v = ""
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
+    markup.add(btn)
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    v = 0
     if id == "0":
         v = datetime.today().weekday()
     elif id == "1":
         v = datetime.today().weekday()+1
+        if v == 7:
+            v = 0
     if id == "2":
+        i = 0
+        info = "Расписание:\n"
+        t = ["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота","Воскресение"]
+        for i in range(0, 7):
+            cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, i))
+            rasp = cur.fetchone()
+            if rasp != None:
+                info += "\n"+t[i]+":\n"
+                j = 0
+                for j in range(0, 10):
+                    if rasp[j + 3] != None:
+                        info += str(j + 1) + ". " + rasp[j + 3] + "\n"
+                    j += 1
+            i += 1
+        cur.close()
+        conn.close()
+        btn = types.InlineKeyboardButton("Изменить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}")
+        markup.add(btn)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info,reply_markup=markup)
         return
-    conn = sql.connect(f'./sqls/{schoolID}.sql')
-    cur = conn.cursor()
     cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, v))
     rasp = cur.fetchone()
     cur.close()
     conn.close()
-    markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
-    markup.add(btn)
     if rasp == None:
         btn = types.InlineKeyboardButton("Добавить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}")
         markup.add(btn)
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Расписание не задано", reply_markup=markup)
+    else:
+        btn = types.InlineKeyboardButton("Изменить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}:{v}:1")
+        markup.add(btn)
+        info = "Расписание:\n"
+        i = 0
+        for i in range(0,10):
+            if rasp[i+3] != None:
+                info+=str(i+1) + ". " + rasp[i+3] + "\n"
+            i+=1
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
 def add_rasp_list(message, schoolID, school_class):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data=f"rasp:{schoolID}:{school_class}:2")
@@ -325,9 +356,47 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
 def see_news(message, schoolID, school_class):
     pass
 def see_dz(message, schoolID, school_class, id):
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM dz WHERE class = ?',(school_class,))
+    dzs = cur.fetchall()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data='school_infoo')
+    markup.add(btn)
+    temp_array = []
+    for el in dzs:
+        for elem in temp_array:
+            if el[1] != elem:
+                temp_array.append(el[1])
+    for el in temp_array:
+        btn = types.InlineKeyboardButton(el, callback_data=f'see_dz_step_1:{schoolID}:{school_class}:{el}')
+        markup.add(btn)
+    btn = types.InlineKeyboardButton("Добавить дз", callback_data=f"add_homeTask:{schoolID}:{school_class}")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Удалить дз", callback_data=f"rem_homeTask:{schoolID}:{school_class}")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери день",reply_markup=markup)
+def see_dz_step_1(message, schoolID, school_class, date):
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM dz WHERE class = ? AND date = ?',(school_class, date))
+    dzs = cur.fetchall()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f'homeTask:{schoolID}:{school_class}:0')
+    markup.add(btn)
+    info = f"Дз на {date}\n\n"
+    for el in dzs:
+        info += f"{el[2]}: {el[3]}\n"
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = info, reply_markup=markup)
+def add_homeTask(message, schoolID, school_class):
+    pass
+def rem_homeTask(message, schoolID, school_class):
     pass
 def create_new_scholl_db(schoolID):
-    print(schoolID)
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
     cur.execute('CREATE TABLE IF NOT EXISTS rasp (id int auto_increment primary key, class varchar(6), day int, lesson1 varchar(25), lesson2 varchar(25), lesson3 varchar(25), lesson4 varchar(25), lesson5 varchar(25), lesson6 varchar(25), lesson7 varchar(25), lesson8 varchar(25), lesson9 varchar(25), lesson10 varchar(25))')
@@ -479,6 +548,14 @@ def callback(call):
             add_dz(call.message, callRazd[1], callRazd[2], callRazd[3], callRazd[4])
         elif len(callRazd)==6:
             add_dz(call.message, callRazd[1], callRazd[2], callRazd[3], callRazd[4], callRazd[5])
+    elif callRazd[0] == "add_homeTask":
+        add_homeTask(call.message, callRazd[1], callRazd[2])
+    elif callRazd[0] == "rem_homeTask":
+        rem_homeTask(call.message, callRazd[1], callRazd[2])
+    elif callRazd[0] == "GDZ":
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Делай сам")
+    elif callRazd[0] == "see_dz_step_1":
+        see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
 
