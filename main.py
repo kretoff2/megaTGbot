@@ -133,7 +133,7 @@ def main(message):
 def go_education(message):
     i = False
     for users in data["education"]:
-        if users == message.chat.id:
+        if users == str(message.chat.id):
             i = True
     if i == False or data['education'][str(message.chat.id)] == {}:
         data['education'][str(message.chat.id)]['completed_lesson'] = 0
@@ -153,7 +153,7 @@ def go_education(message):
     btn = types.InlineKeyboardButton("Тесты", callback_data="tests_list")
     btn1 = types.InlineKeyboardButton("Шпаргалки", callback_data="cheat_sheets_list")
     markup.add(btn, btn1)
-    text = f"Привет {message.from_user.first_name}, давай начнем обучение.\n\nТы прошел(а):\n{data['education'][str(message.chat.id)]['completed_lesson']} уроков" \
+    text = f"Давай начнем обучение.\n\nТы прошел(а):\n{data['education'][str(message.chat.id)]['completed_lesson']} уроков" \
            f"\n{data['education'][str(message.chat.id)]['completed_courses']} учебных курсов\n{data['education'][str(message.chat.id)]['completed_tests']} тестов\n" \
            f"\nСредний балл: {data['education'][str(message.chat.id)]['GPA']}\n\nРешено задач: {data['education'][str(message.chat.id)]['problems_solved']}" \
            f"\nРешено правильно: {data['education'][str(message.chat.id)]['decided_correctly']}"
@@ -193,7 +193,7 @@ def lessons_list(message):
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
     for el in lessonsData['lessons']:
-        btn = types.InlineKeyboardButton(lessonsData['lessons'][el]['name'], callback_data=f"lesson:{el}")
+        btn = types.InlineKeyboardButton(lessonsData['lessons'][el]['name'], callback_data=f"lesson:{el}:1")
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок", reply_markup=markup)
 def tests_list(message):
@@ -201,9 +201,9 @@ def tests_list(message):
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
     for el in lessonsData['tests']:
-        btn = types.InlineKeyboardButton(lessonsData['tests'][el]['name'], callback_data=f"test:{el}")
+        btn = types.InlineKeyboardButton(lessonsData['tests'][el]['name'], callback_data=f"test:{el}:1:0:False")
         markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок", reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тест", reply_markup=markup)
 def cheat_sheets_list(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
@@ -214,10 +214,51 @@ def cheat_sheets_list(message):
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет", reply_markup=markup)
 def start_course(message, courseID):
     pass
-def start_lesson(message, lessonID):
-    pass
-def start_test(message, testID):
-    pass
+def start_lesson(message, lessonID, index):
+    markup = types.InlineKeyboardMarkup()
+    if index == len(lessonsData["lessons"][lessonID]["text"]):
+        data['education'][str(message.chat.id)]['completed_lesson']+=1
+        save_data()
+        btn = types.InlineKeyboardButton("Пройти тест", callback_data=f'test:{lessonsData["lessons"][lessonID]["test"]}:1:0:False')
+        markup.add(btn)
+    else:
+        btn = types.InlineKeyboardButton("Дальше", callback_data=f'lesson:{lessonID}:{index+1}')
+        markup.add(btn)
+    btn = types.InlineKeyboardButton("Закончить", callback_data='lessons_list')
+    markup.add(btn)
+    info = lessonsData["lessons"][lessonID]["text"][str(index)]
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+def start_test(message, testID, index, score, true=False):
+    markup = types.InlineKeyboardMarkup()
+    question = ""
+    if index != 1 and true == False:
+        question += "Не верно\nПравильный ответ: " + lessonsData["tests"][testID]["questions"][f"{index-1}variants"]["1"] + "\n\n"
+    if true == True:
+        question += "Верно\n\n"
+        score+=1
+    if index > len(lessonsData["tests"][testID]["questions"])/2:
+        info = f"Результат теста\nВопросов: {index-1}\nПравильных ответов: {score}"
+        data['education'][str(message.chat.id)]['completed_tests']+=1
+        data['education'][str(message.chat.id)]['problems_solved']+=index-1
+        data['education'][str(message.chat.id)]['decided_correctly']+=score
+        i = 10/(index-1)*score
+        t = data['education'][str(message.chat.id)]['GPA']
+        data['education'][str(message.chat.id)]['GPA'] = (i+t)/2
+        save_data()
+        btn = types.InlineKeyboardButton("Выйти", callback_data="education")
+        markup.add(btn)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+    else:
+        question += lessonsData["tests"][testID]["questions"][str(index)]
+        method = [1,2,3,4]
+        random.shuffle(method)
+        for el in method:
+            if el == 1:
+                btn = types.InlineKeyboardButton(lessonsData["tests"][testID]["questions"][f"{index}variants"][str(el)], callback_data=f'test:{testID}:{index+1}:{score}:True')
+            else:
+                btn = types.InlineKeyboardButton(lessonsData["tests"][testID]["questions"][f"{index}variants"][str(el)],callback_data=f'test:{testID}:{index+1}:{score}:False')
+            markup.add(btn)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=question, reply_markup=markup)
 def sen_cheat_sheets_list(message, subject):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="cheat_sheets_list")
@@ -448,9 +489,11 @@ def callback(call):
     elif callRazd[0] == "course":
         start_course(call.message, callRazd[1])
     elif callRazd[0] == "lesson":
-        start_lesson(call.message, callRazd[1])
+        start_lesson(call.message, callRazd[1], int(callRazd[2]))
     elif callRazd[0] == "test":
-        start_test(call.message, callRazd[1])
+        if callRazd[4] == "False": t = False
+        elif callRazd[4] == "True": t = True
+        start_test(call.message, callRazd[1], int(callRazd[2]), int(callRazd[3]), t)
     elif callRazd[0] == "sen_cheat_sheets_list":
         sen_cheat_sheets_list(call.message, callRazd[1])
     elif callRazd[0] == "sen_cheat_sheets":
