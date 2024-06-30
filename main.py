@@ -8,10 +8,9 @@ import requests
 import os
 import json
 import array
+import config
 
-testBot = telebot.TeleBot('6764297608:AAEx5Eqbvh5BMTTbAMV0FVRM5B7tqObZYmU')
-realBot = telebot.TeleBot("6468345657:AAFY4m6lYkktI8ZecWW-5EfChyT0aOHWWW8")
-bot = testBot
+bot = telebot.TeleBot(config.bot)
 
 conn = sql.connect('db.sql')
 cur = conn.cursor()
@@ -22,8 +21,6 @@ cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary ke
 cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
-
-BOT_NICKNAME = "Test_7a_bot"
 
 conn.commit()
 cur.close()
@@ -56,7 +53,7 @@ def my_markup():
     return markup
 @bot.message_handler(commands=['allMessage'])
 def main(message):
-  if (message.chat.id != 1917247858):
+  if (message.chat.id != config.ADMIN_ID):
     bot.send_message(message.chat.id, "Вам не доступна эта команда")
     return
   markup = types.ReplyKeyboardMarkup(row_width=1)
@@ -170,13 +167,20 @@ def my_room(message):
     markup.add(btn)
     if (info[13] == None):
         btn = types.InlineKeyboardButton("Выбрать класс", callback_data=f"class_vibor")
-        markup.add(btn)
+    else:
+        btn = types.InlineKeyboardButton("Изменить класс", callback_data="class_vibor")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Изменить имя", callback_data=f"new_name:{message.chat.id}")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Изменить фамилию", callback_data=f"new_last_name:{message.chat.id}")
+    markup.add(btn)
+    data["usersData"]["tempMessage"] = message
     infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
 @bot.message_handler(commands=['op'])
 def main(message):
-  if (message.chat.id != 1917247858):
+  if (message.chat.id != config.ADMIN_ID):
     bot.send_message(message.chat.id, "Вам не доступна эта команда")
     return
   bot.send_message(message.chat.id, 'Введите имя администратора')
@@ -184,7 +188,7 @@ def main(message):
 
 @bot.message_handler(commands=['deop'])
 def main(message):
-  if (message.chat.id != 1917247858):
+  if (message.chat.id != config.ADMIN_ID):
     bot.send_message(message.chat.id, "Вам не доступна эта команда")
     return
   bot.send_message(message.chat.id, 'Введите имя администратора')
@@ -465,8 +469,7 @@ def callback(call):
         infoText = f'ID: {info[1]}\n\nСтрана: {info[2]}\nОбласть: {info[3]}\nГород/деревня: {info[4]}\nШкола: {info[5]}\nРэйтинг: {info[6]}'
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Назад", callback_data="back_to_my_room")
-        btn1 = types.InlineKeyboardButton("Изменить класс", callback_data="class_vibor")
-        markup.add(btn, btn1)
+        markup.add(btn)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "back_to_my_room":
         conn = sql.connect('db.sql')
@@ -530,7 +533,7 @@ def callback(call):
         infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "invite_frend":
-        bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
+        bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{config.BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
     elif callRazd[0] == "rasp":
         rasp(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "news":
@@ -556,6 +559,30 @@ def callback(call):
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Делай сам")
     elif callRazd[0] == "see_dz_step_1":
         see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
+    elif callRazd[0] == "new_name":
+        bot.send_message(int(callRazd[1]), "Впишите новое имя")
+        message = data["usersData"]["tempMessage"]
+        bot.register_next_step_handler(message, new_name)
+    elif callRazd[0] == "new_last_name":
+        bot.send_message(int(callRazd[1]), "Впишите новую фамилию")
+        message = data["usersData"]["tempMessage"]
+        bot.register_next_step_handler(message, new_last_name)
+def new_name(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('UPDATE users SET first_name = ? WHERE chatID = ?', (message.text, message.chat.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    my_room(message)
+def new_last_name(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('UPDATE users SET last_name = ? WHERE chatID = ?', (message.text, message.chat.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    my_room(message)
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
 
