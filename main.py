@@ -566,10 +566,15 @@ def send_vibor_obl(call):
     obls = cur.fetchall()
     cur.close()
     conn.close()
+    my_array=[]
     for el in obls:
         if str(el[0]) != "None":
-            btn = types.InlineKeyboardButton(str(el[0]), callback_data=f"second_register_step:{el[0]}")
-            markup.add(btn)
+            for elem in my_array:
+                if elem != str(el[0]):
+                    my_array.append(str(el[0]))
+    for el in my_array:
+        btn = types.InlineKeyboardButton(el, callback_data=f"second_register_step:{el}")
+        markup.add(btn)
     btn = types.InlineKeyboardButton("Другая", callback_data=f"second_register_step_else")
     markup.add(btn)
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text='Выбери область',reply_markup=markup)
@@ -595,10 +600,15 @@ def send_vibor_sity(message):
     sitys = cur.fetchall()
     cur.close()
     conn.close()
+    my_array = []
     for el in sitys:
         if str(el[0]) != "None":
-            btn = types.InlineKeyboardButton(str(el[0]), callback_data=f"serd_register_step:{el[0]}")
-            markup.add(btn)
+            for elem in my_array:
+                if elem != el[0]:
+                    my_array.append(el[0])
+    for el in my_array:
+        btn = types.InlineKeyboardButton(el, callback_data=f"serd_register_step:{el}")
+        markup.add(btn)
     btn = types.InlineKeyboardButton("Друой", callback_data=f"serd_register_step_else")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери город',reply_markup=markup)
@@ -625,10 +635,15 @@ def send_vibor_school(message):
     schools = cur.fetchall()
     cur.close()
     conn.close()
+    my_array = []
     for el in schools:
         if str(el[0]) != "None":
-            btn = types.InlineKeyboardButton(str(el[0]), callback_data=f"fourth_register_step:{el[0]}")
-            markup.add(btn)
+            for elem in my_array:
+                if elem != el[0]:
+                    my_array.append(el[0])
+    for el in my_array:
+        btn = types.InlineKeyboardButton(el, callback_data=f"fourth_register_step:{el}")
+        markup.add(btn)
     btn = types.InlineKeyboardButton("Другая", callback_data=f"fourth_register_step_else")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери школу',reply_markup=markup)
