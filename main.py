@@ -174,7 +174,7 @@ def my_room(message):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Изменить фамилию", callback_data=f"new_last_name:{message.chat.id}")
     markup.add(btn)
-    data["usersData"]["tempMessage"] = message
+    data["usersData"][str(message.chat.id)]["tempMessage"] = message
     infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
@@ -358,7 +358,19 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Выбери {int(number)+1} урок", reply_markup=markup)
 def see_news(message, schoolID, school_class):
-    pass
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM news WHERE class = ?', (school_class,))
+    news = cur.fetchall()
+    cur.close()
+    conn.close()
+    info = "Новости:\n"
+    for el in news:
+        info+=el[1]+"\n"+el[2]+"\n\n"
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
 def see_dz(message, schoolID, school_class, id):
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
@@ -371,10 +383,9 @@ def see_dz(message, schoolID, school_class, id):
     markup.add(btn)
     temp_array = []
     for el in dzs:
-        for elem in temp_array:
-            if el[1] != elem:
-                temp_array.append(el[1])
-    for el in temp_array:
+        temp_array.append(el[1])
+    temp_set = list(set(temp_array))
+    for el in temp_set:
         btn = types.InlineKeyboardButton(el, callback_data=f'see_dz_step_1:{schoolID}:{school_class}:{el}')
         markup.add(btn)
     btn = types.InlineKeyboardButton("Добавить дз", callback_data=f"add_homeTask:{schoolID}:{school_class}")
@@ -397,7 +408,81 @@ def see_dz_step_1(message, schoolID, school_class, date):
         info += f"{el[2]}: {el[3]}\n"
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = info, reply_markup=markup)
 def add_homeTask(message, schoolID, school_class):
-    pass
+    today = datetime.today().date()
+    todaySPL = str(today).split('-')
+    i = 0
+    d = int(todaySPL[2])
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{school_class}:0")
+    markup.add(btn)
+    for i in range(0,10):
+        btn = types.InlineKeyboardButton(f'{d}.{todaySPL[1]}.{todaySPL[0]}', callback_data=f"add_homeTask_step_1:{d}.{todaySPL[1]}.{todaySPL[0]}")
+        markup.add(btn)
+        d+=1
+        if d >= 32:
+            d=1
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери дату (Обратите внимание на 31 число, его может не быть в месяце)", reply_markup=markup)
+def add_homeTask_step_1(message):
+    tempData = data["usersData"][str(message.chat.id)]["tempDate"]
+    date = datetime.strptime(tempData, '%d.%m.%Y')
+    #date = datetime.datetime(int(tempDataSPL[2]), int(tempDataSPL[1]), int(tempDataSPL[0]))
+    weekday = date.weekday()
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
+    schoolID = cur.fetchone()
+    cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
+    my_class = cur.fetchone()
+    cur.close()
+    conn.close()
+    conn = sql.connect(f'./sqls/{schoolID[0]}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM rasp WHERE day = ? AND class = ?', (weekday, my_class[0]))
+    rasp = cur.fetchone()
+    cur.execute('SELECT predmet FROM dz WHERE date = ? AND class = ?', (tempData, my_class[0]))
+    dzs = cur.fetchall()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID[0]}:{my_class[0]}:0")
+    markup.add(btn)
+    i = 0
+    for i in range(0,10):
+        i += 1
+        if rasp[i+2] != None:
+            b = True
+            for el in dzs:
+                if el[0] == rasp[i+2]:
+                    b = False
+            if b == True:
+                btn = types.InlineKeyboardButton(rasp[i+2],callback_data=f"add_homeTask_step_2:{tempData}:{rasp[i+2]}")
+                markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
+
+def add_homeTask_step_2(message, date, subject):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
+    markup.add(btn)
+    data["usersData"][str(message.chat.id)]["tempSubject"] = subject
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Впиши дз по {subject} на {date}", reply_markup=markup)
+    bot.register_next_step_handler(message, add_homeTask_step_3)
+def add_homeTask_step_3(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
+    t = cur.fetchone()
+    schoolID = t[0]
+    cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
+    t = cur.fetchone()
+    my_class = t[0]
+    cur.close()
+    conn.close()
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (data["usersData"][str(message.chat.id)]["tempDate"], data["usersData"][str(message.chat.id)]["tempSubject"], message.text, my_class))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(message.chat.id, "Дз добавлено")
+    school_info(message)
 def rem_homeTask(message, schoolID, school_class):
     pass
 def create_new_scholl_db(schoolID):
@@ -541,6 +626,7 @@ def callback(call):
     elif callRazd[0] == "homeTask":
         see_dz(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "school_infoo":
+        bot.delete_message(call.message.chat.id, call.message.message_id)
         school_info(call.message)
     elif callRazd[0] == "add_rasp_list":
         add_rasp_list(call.message, callRazd[1], callRazd[2])
@@ -556,17 +642,23 @@ def callback(call):
     elif callRazd[0] == "rem_homeTask":
         rem_homeTask(call.message, callRazd[1], callRazd[2])
     elif callRazd[0] == "GDZ":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Делай сам")
+        markup = types.InlineKeyboardMarkup()
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Делай сам", reply_markup=markup)
     elif callRazd[0] == "see_dz_step_1":
         see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "new_name":
         bot.send_message(int(callRazd[1]), "Впишите новое имя")
-        message = data["usersData"]["tempMessage"]
+        message = data["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_name)
     elif callRazd[0] == "new_last_name":
         bot.send_message(int(callRazd[1]), "Впишите новую фамилию")
-        message = data["usersData"]["tempMessage"]
+        message = data["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_last_name)
+    elif callRazd[0] == "add_homeTask_step_1":
+        data["usersData"][str(call.message.chat.id)]["tempDate"] = callRazd[1]
+        add_homeTask_step_1(call.message)
+    elif callRazd[0] == "add_homeTask_step_2":
+        add_homeTask_step_2(call.message, callRazd[1], callRazd[2])
 def new_name(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
