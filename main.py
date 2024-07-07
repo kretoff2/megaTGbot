@@ -1,3 +1,5 @@
+import sqlite3
+
 import telebot
 from telebot import types
 import sqlite3 as sql
@@ -9,6 +11,7 @@ import os
 import json
 import array
 import config
+from pathlib import Path
 
 bot = telebot.TeleBot(config.bot)
 
@@ -50,7 +53,38 @@ def my_markup():
     markup.add(btn)
     btn = types.KeyboardButton("Школа 🏫")
     markup.add(btn)
+    btn = types.KeyboardButton("Школа kretoff'a 💻")
+    markup.add(btn)
     return markup
+@bot.message_handler(commands=['delOldDz'])
+def main(message):
+    folder_name = "sqls"
+    folder = Path(folder_name)
+    col = sum(1 for x in folder.iterdir())
+    i=0
+    yesterday = datetime.today().date()
+    yesterdaySPL = str(yesterday).split('-')
+    for i in range(0, col):
+        i+=1
+        conn = sql.connect(f'./sqls/{i}.sql')
+        cur = conn.cursor()
+        j = 0
+        v = int(yesterdaySPL[2])-1
+        for j in range(0, 10):
+            if v == 0:
+                v=31
+            date = f'{v}.{yesterdaySPL[1]}.{yesterdaySPL[0]}'
+            try:
+                cur.execute('DELETE FROM dz WHERE date = ?', (date,))
+            except sqlite3.OperationalError:
+                pass
+            j+=1
+            v-=1
+        conn.commit()
+        cur.close()
+        conn.close()
+    bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
+
 @bot.message_handler(commands=['allMessage'])
 def main(message):
   if (message.chat.id != config.ADMIN_ID):
@@ -326,9 +360,9 @@ def add_rasp_list(message, schoolID, school_class):
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="На какой день недели вы хотите ввести рассписание", reply_markup=markup)
 def add_dz(message, schoolID, school_class, day = None, number = None, subject = None):
     subjects = {"Русский язык", "Белорусский язык", "Иностранный язык", "Математика", "Алгебра", "Геометрия",
-                "Русская литература", "Белорусская литература", "Человек и мир", "Всемирная истроия",
+                "Русская лит.", "Белорусская лит.", "Человек и мир", "Всемирная истроия",
                 "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
-                "Химия", "Обществоведение", "Допризывная подготовка", "Медицинская подготовка", "Черчение",
+                "Химия", "Обществоведение", "Допризыв. под.", "Мед. подготовка", "Черчение",
                 "Астрономия"}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
@@ -350,7 +384,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
     conn.commit()
     cur.close()
     conn.close()
-    if number == 10:
+    if number >= 10:
         rasp(message, schoolID, school_class, 2)
         return
     for el in subjects:
@@ -406,7 +440,7 @@ def see_dz_step_1(message, schoolID, school_class, date):
     info = f"Дз на {date}\n\n"
     for el in dzs:
         info += f"{el[2]}: {el[3]}\n"
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text = info, reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
 def add_homeTask(message, schoolID, school_class):
     today = datetime.today().date()
     todaySPL = str(today).split('-')
@@ -423,6 +457,7 @@ def add_homeTask(message, schoolID, school_class):
             d=1
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери дату (Обратите внимание на 31 число, его может не быть в месяце)", reply_markup=markup)
 def add_homeTask_step_1(message):
+    global data
     tempData = data["usersData"][str(message.chat.id)]["tempDate"]
     date = datetime.strptime(tempData, '%d.%m.%Y')
     #date = datetime.datetime(int(tempDataSPL[2]), int(tempDataSPL[1]), int(tempDataSPL[0]))
@@ -453,7 +488,10 @@ def add_homeTask_step_1(message):
                 if el[0] == rasp[i+2]:
                     b = False
             if b == True:
-                btn = types.InlineKeyboardButton(rasp[i+2],callback_data=f"add_homeTask_step_2:{tempData}:{rasp[i+2]}")
+                j = len(f"add_homeTask_step_2:{tempData}:{rasp[i+2]}".encode('utf-8'))
+                print(j)
+                print(f"add_homeTask_step_2:{tempData}:{rasp[i+2]}".encode('utf-8'))
+                btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"add_homeTask_step_2:{tempData}:{rasp[i+2]}")
                 markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
 
@@ -484,7 +522,51 @@ def add_homeTask_step_3(message):
     bot.send_message(message.chat.id, "Дз добавлено")
     school_info(message)
 def rem_homeTask(message, schoolID, school_class):
-    pass
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM dz WHERE class = ?', (school_class,))
+    dzs = cur.fetchall()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{school_class}:0")
+    markup.add(btn)
+    temp_array = []
+    for el in dzs:
+        temp_array.append(el[1])
+    temp_set = list(set(temp_array))
+    for el in temp_set:
+        btn = types.InlineKeyboardButton(el, callback_data=f'rem_dz_step_1:{schoolID}:{school_class}:{el}')
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери день",reply_markup=markup)
+
+def rem_dz_step_1(message, schoolID, school_class, date):
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM dz WHERE class = ? AND date = ?', (school_class, date))
+    dzs = cur.fetchall()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{school_class}:0")
+    markup.add(btn)
+    temp_array = []
+    for el in dzs:
+        temp_array.append(el[2])
+    temp_set = list(set(temp_array))
+    for el in temp_set:
+        btn = types.InlineKeyboardButton(el, callback_data=f'rem_dz_step_2:{schoolID}:{school_class}:{date}:{el}')
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет и дз по нему сразу удалится",reply_markup=markup)
+def rem_dz_step_2(message, schoolID, school_class, date, subject):
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('DELETE FROM dz WHERE class = ? AND predmet = ? AND date = ?', (school_class, subject, date))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(message.chat.id, "Дз успешно удалено")
+    see_dz(message, schoolID, school_class, 0)
 def create_new_scholl_db(schoolID):
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
@@ -494,6 +576,10 @@ def create_new_scholl_db(schoolID):
     conn.commit()
     cur.close()
     conn.close()
+
+def kretoffSchool(message):
+    markup = types.InlineKeyboardMarkup()
+    bot.send_message(message.chat.id, "Что ты хочешь узнать?", reply_markup=markup)
 @bot.message_handler()
 def main(message):
     if message.text == "Личный кабинет 🪪":
@@ -504,6 +590,8 @@ def main(message):
         go_education(message)
     elif message.text == "Школа 🏫":
         school_info(message)
+    elif message.text == "Школа kretoff'a 💻":
+        kretoffSchool(message)
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
@@ -642,8 +730,7 @@ def callback(call):
     elif callRazd[0] == "rem_homeTask":
         rem_homeTask(call.message, callRazd[1], callRazd[2])
     elif callRazd[0] == "GDZ":
-        markup = types.InlineKeyboardMarkup()
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Делай сам", reply_markup=markup)
+        bot.send_message(call.message.chat.id, "Делай сам")
     elif callRazd[0] == "see_dz_step_1":
         see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "new_name":
@@ -655,10 +742,15 @@ def callback(call):
         message = data["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_last_name)
     elif callRazd[0] == "add_homeTask_step_1":
+        print(call.message)
         data["usersData"][str(call.message.chat.id)]["tempDate"] = callRazd[1]
         add_homeTask_step_1(call.message)
     elif callRazd[0] == "add_homeTask_step_2":
         add_homeTask_step_2(call.message, callRazd[1], callRazd[2])
+    elif callRazd[0] == "rem_dz_step_1":
+        rem_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
+    elif callRazd[0] == "rem_dz_step_2":
+        rem_dz_step_2(call.message, callRazd[1], callRazd[2], callRazd[3], callRazd[4])
 def new_name(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
