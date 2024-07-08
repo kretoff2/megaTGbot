@@ -15,6 +15,11 @@ from pathlib import Path
 
 bot = telebot.TeleBot(config.bot)
 
+tempData = {
+    "usersData": {
+
+    }
+}
 conn = sql.connect('db.sql')
 cur = conn.cursor()
 cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class var(6))')
@@ -26,6 +31,13 @@ cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key,
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
 conn.commit()
+
+cur.execute('SELECT chatID FROM users')
+usersIds = cur.fetchall()
+for el in usersIds:
+    tempData['usersData'][str(el[0])]={}
+print(tempData)
+
 cur.close()
 conn.close()
 data = {
@@ -36,6 +48,7 @@ data = {
 
     }
 }
+
 lessonsData = {}
 if not os.path.exists('./data.json'):
     with open('data.json', 'w') as f:
@@ -145,6 +158,7 @@ def main(message):
             conn.commit()
             cur.close()
             conn.close()
+            tempData['usersData'][str(message.chat.id)] = {}
             start_command = message.text
             refer_id = str(start_command[7:])
             if refer_id != "" and refer_id != str(message.chat.id):
@@ -208,7 +222,7 @@ def my_room(message):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Изменить фамилию", callback_data=f"new_last_name:{message.chat.id}")
     markup.add(btn)
-    data["usersData"][str(message.chat.id)]["tempMessage"] = message
+    tempData["usersData"][str(message.chat.id)]["tempMessage"] = message
     infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
@@ -457,10 +471,9 @@ def add_homeTask(message, schoolID, school_class):
             d=1
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери дату (Обратите внимание на 31 число, его может не быть в месяце)", reply_markup=markup)
 def add_homeTask_step_1(message):
-    global data
-    tempData = data["usersData"][str(message.chat.id)]["tempDate"]
-    date = datetime.strptime(tempData, '%d.%m.%Y')
-    #date = datetime.datetime(int(tempDataSPL[2]), int(tempDataSPL[1]), int(tempDataSPL[0]))
+    global tempData
+    ttempData = tempData["usersData"][str(message.chat.id)]["tempDate"]
+    date = datetime.strptime(ttempData, '%d.%m.%Y')
     weekday = date.weekday()
     conn = sql.connect('db.sql')
     cur = conn.cursor()
@@ -474,7 +487,7 @@ def add_homeTask_step_1(message):
     cur = conn.cursor()
     cur.execute('SELECT * FROM rasp WHERE day = ? AND class = ?', (weekday, my_class[0]))
     rasp = cur.fetchone()
-    cur.execute('SELECT predmet FROM dz WHERE date = ? AND class = ?', (tempData, my_class[0]))
+    cur.execute('SELECT predmet FROM dz WHERE date = ? AND class = ?', (ttempData, my_class[0]))
     dzs = cur.fetchall()
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID[0]}:{my_class[0]}:0")
@@ -488,10 +501,7 @@ def add_homeTask_step_1(message):
                 if el[0] == rasp[i+2]:
                     b = False
             if b == True:
-                j = len(f"add_homeTask_step_2:{tempData}:{rasp[i+2]}".encode('utf-8'))
-                print(j)
-                print(f"add_homeTask_step_2:{tempData}:{rasp[i+2]}".encode('utf-8'))
-                btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"add_homeTask_step_2:{tempData}:{rasp[i+2]}")
+                btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"add_homeTask_step_2:{ttempData}:{rasp[i+2]}")
                 markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
 
@@ -499,7 +509,7 @@ def add_homeTask_step_2(message, date, subject):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
-    data["usersData"][str(message.chat.id)]["tempSubject"] = subject
+    tempData["usersData"][str(message.chat.id)]["tempSubject"] = subject
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Впиши дз по {subject} на {date}", reply_markup=markup)
     bot.register_next_step_handler(message, add_homeTask_step_3)
 def add_homeTask_step_3(message):
@@ -515,7 +525,7 @@ def add_homeTask_step_3(message):
     conn.close()
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
-    cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (data["usersData"][str(message.chat.id)]["tempDate"], data["usersData"][str(message.chat.id)]["tempSubject"], message.text, my_class))
+    cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (tempData["usersData"][str(message.chat.id)]["tempDate"], tempData["usersData"][str(message.chat.id)]["tempSubject"], message.text, my_class))
     conn.commit()
     cur.close()
     conn.close()
@@ -604,15 +614,15 @@ def callback(call):
         data["usersData"][str(call.message.chat.id)]["obl"] = callRazd[1]
         send_vibor_sity(call.message)
     elif callRazd[0] == "second_register_step_else":
-        data["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        data["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
         bot.register_next_step_handler(call.message, else_obl)
     elif callRazd[0] == "serd_register_step":
         data["usersData"][str(call.message.chat.id)]["sity"] = callRazd[1]
         send_vibor_school(call.message)
     elif callRazd[0] == "serd_register_step_else":
-        data["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        data["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
         bot.register_next_step_handler(call.message, else_sity)
     elif callRazd[0] == "fourth_register_step":
         conn = sql.connect('db.sql')
@@ -627,8 +637,8 @@ def callback(call):
         bot.send_message(call.message.chat.id, "Вы успешно зарегистрированы")
         Go_start(call.message)
     elif callRazd[0] == "fourth_register_step_else":
-        data["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        data["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
         bot.register_next_step_handler(call.message, else_school)
     elif callRazd[0] == "school_info":
         conn = sql.connect('db.sql')
@@ -735,15 +745,15 @@ def callback(call):
         see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "new_name":
         bot.send_message(int(callRazd[1]), "Впишите новое имя")
-        message = data["usersData"][str(callRazd[1])]["tempMessage"]
+        message = tempData["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_name)
     elif callRazd[0] == "new_last_name":
         bot.send_message(int(callRazd[1]), "Впишите новую фамилию")
-        message = data["usersData"][str(callRazd[1])]["tempMessage"]
+        message = tempData["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_last_name)
     elif callRazd[0] == "add_homeTask_step_1":
         print(call.message)
-        data["usersData"][str(call.message.chat.id)]["tempDate"] = callRazd[1]
+        tempData["usersData"][str(call.message.chat.id)]["tempDate"] = callRazd[1]
         add_homeTask_step_1(call.message)
     elif callRazd[0] == "add_homeTask_step_2":
         add_homeTask_step_2(call.message, callRazd[1], callRazd[2])
@@ -780,9 +790,8 @@ def send_vibor_obl(call):
     my_array=[]
     for el in obls:
         if str(el[0]) != "None":
-            for elem in my_array:
-                if elem != str(el[0]):
-                    my_array.append(str(el[0]))
+            if el[0] not in my_array:
+                my_array.append(str(el[0]))
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"second_register_step:{el}")
         markup.add(btn)
@@ -798,9 +807,10 @@ def else_obl(message):
     cur.close()
     conn.close()
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, data["usersData"][str(message.chat.id)]["MessageID"])
+    bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["obl"] = message.text
-    send_vibor_sity(data["usersData"][f"{message.chat.id}"]["botMessageID"])
+    save_data()
+    send_vibor_sity(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
 
 def send_vibor_sity(message):
     markup = types.InlineKeyboardMarkup()
@@ -814,9 +824,8 @@ def send_vibor_sity(message):
     my_array = []
     for el in sitys:
         if str(el[0]) != "None":
-            for elem in my_array:
-                if elem != el[0]:
-                    my_array.append(el[0])
+            if el[0] not in my_array:
+                my_array.append(el[0])
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"serd_register_step:{el}")
         markup.add(btn)
@@ -832,9 +841,10 @@ def else_sity(message):
     cur.close()
     conn.close()
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, data["usersData"][str(message.chat.id)]["MessageID"])
+    bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["sity"] = message.text
-    send_vibor_school(data["usersData"][f"{message.chat.id}"]["botMessageID"])
+    save_data()
+    send_vibor_school(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
 
 def send_vibor_school(message):
     markup = types.InlineKeyboardMarkup()
@@ -849,9 +859,8 @@ def send_vibor_school(message):
     my_array = []
     for el in schools:
         if str(el[0]) != "None":
-            for elem in my_array:
-                if elem != el[0]:
-                    my_array.append(el[0])
+            if el[0] not in my_array:
+                my_array.append(el[0])
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"fourth_register_step:{el}")
         markup.add(btn)
@@ -872,7 +881,7 @@ def else_school(message):
     cur.close()
     conn.close()
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, data["usersData"][str(message.chat.id)]["MessageID"])
+    bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     bot.send_message(message.chat.id,"Вы успешно зарегистрированы, для начала работы с ботом пропишите /start")
     create_new_scholl_db(len(schols))
     Go_start(message)
