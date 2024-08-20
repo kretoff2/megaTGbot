@@ -21,7 +21,7 @@ tempData = {
 }
 conn = sql.connect('db.sql')
 cur = conn.cursor()
-cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class var(6))')
+cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class varchar(6))')
 cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50), rating int)')
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
@@ -65,37 +65,43 @@ def my_markup():
     markup.add(btn)
     btn = types.KeyboardButton("Школа 🏫")
     markup.add(btn)
-    btn = types.KeyboardButton("Школа kretoff'a 💻")
+    btn = types.KeyboardButton("Школа kretoffer'a 💻")
     markup.add(btn)
     return markup
 @bot.message_handler(commands=['delOldDz'])
 def main(message):
+    if message.chat.id != config.ADMIN_ID:
+        bot.send_message(message.chat.id, "Недостаточнго прав")
+    delOldDz(message)
+
+def delOldDz(message=None):
     folder_name = "sqls"
     folder = Path(folder_name)
     col = sum(1 for x in folder.iterdir())
-    i=0
+    i = 0
     yesterday = datetime.today().date()
     yesterdaySPL = str(yesterday).split('-')
     for i in range(0, col):
-        i+=1
+        i += 1
         conn = sql.connect(f'./sqls/{i}.sql')
         cur = conn.cursor()
         j = 0
-        v = int(yesterdaySPL[2])-1
+        v = int(yesterdaySPL[2]) - 1
         for j in range(0, 10):
             if v == 0:
-                v=31
+                v = 31
             date = f'{v}.{yesterdaySPL[1]}.{yesterdaySPL[0]}'
             try:
                 cur.execute('DELETE FROM dz WHERE date = ?', (date,))
             except sql.OperationalError:
                 pass
-            j+=1
-            v-=1
+            j += 1
+            v -= 1
         conn.commit()
         cur.close()
         conn.close()
-    bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
+    if message != None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
+    else: print("Старое дз за последние 10 дней удалено")
 
 @bot.message_handler(commands=['allMessage'])
 def main(message):
@@ -154,9 +160,6 @@ def main(message):
             conn = sql.connect('db.sql')
             cur = conn.cursor()
             cur.execute('INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
-            conn.commit()
-            cur.close()
-            conn.close()
             tempData['usersData'][str(message.chat.id)] = {}
             start_command = message.text
             refer_id = str(start_command[7:])
@@ -165,7 +168,11 @@ def main(message):
                 data["usersData"][str(refer_id)]["invitedCol"]+=1
                 data["usersData"][str(message.chat.id)]["invited"][str(data["usersData"][str(refer_id)]["invitedCol"])] = message.chat.id
                 save_data()
+                cur.execute("UPDATE users SET diamonds = diamonds+10 WHERE chatID = ? OR chatID = ?", (refer_id, message.chat.id))
                 bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
+            conn.commit()
+            cur.close()
+            conn.close()
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -465,6 +472,10 @@ def addAdmin(message):
 def school_info(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
+    cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
+    if cur.fetchone()[0] == None:
+        bot.send_message(message.chat.id, "Сначала укажите класс в личном кабинете")
+        return
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
     temp = cur.fetchone()
     schoolID = temp[0]
@@ -582,7 +593,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
     conn.commit()
     cur.close()
     conn.close()
-    if number >= 10:
+    if int(number) >= 10:
         rasp(message, schoolID, school_class, 2)
         return
     for el in subjects:
@@ -773,7 +784,7 @@ def create_new_scholl_db(schoolID):
 
 def kretoffSchool(message):
     markup = types.InlineKeyboardMarkup()
-    bot.send_message(message.chat.id, "Что ты хочешь узнать?", reply_markup=markup)
+    bot.send_message(message.chat.id, "В разработке", reply_markup=markup)
 @bot.message_handler()
 def main(message):
     if message.text == "Личный кабинет 🪪":
@@ -784,7 +795,7 @@ def main(message):
         go_education(message)
     elif message.text == "Школа 🏫":
         school_info(message)
-    elif message.text == "Школа kretoff'a 💻":
+    elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -833,7 +844,7 @@ def callback(call):
             return
         cur.close()
         conn.close()
-        infoText = f'ID: {info[1]}\n\nСтрана: {info[2]}\nОбласть: {info[3]}\nГород/деревня: {info[4]}\nШкола: {info[5]}\nРэйтинг: {info[6]}'
+        infoText = f'ID: {info[1]}\n\nСтрана: {info[2]}\nОбласть: {info[3]}\nГород/деревня: {info[4]}\nШкола: {info[5]}\nРейтинг: {info[6]}'
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Назад", callback_data="back_to_my_room")
         markup.add(btn)
@@ -900,7 +911,7 @@ def callback(call):
         infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "invite_frend":
-        bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы получите 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{config.BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
+        bot.send_message(call.message.chat.id, f"Если ваш друг перейдет по вашей реферальной ссылке, то вы и ваш друг получите по 10 алмазов\n\nВаша ссылка:\nhttps://t.me/{config.BOT_NICKNAME}?start={call.message.chat.id}\n\nТекущее количество приглашенных людей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}")
     elif callRazd[0] == "rasp":
         rasp(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "news":
@@ -1108,4 +1119,5 @@ def else_school(message):
     create_new_scholl_db(len(schols))
     Go_start(message)
 
+delOldDz()
 bot.polling(none_stop=True)
