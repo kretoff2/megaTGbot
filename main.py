@@ -147,6 +147,7 @@ def main(message):
     user = cur.fetchone()
     cur.close()
     conn.close()
+    print(user)
     if user is None:
         conn = sql.connect('db.sql')
         cur = conn.cursor()
@@ -168,7 +169,7 @@ def main(message):
         conn.commit()
         cur.close()
         conn.close()
-    if user[6] == 1:
+    if user[6] == 0:
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
