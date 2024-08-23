@@ -134,11 +134,7 @@ def allMesage(message):
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
 @bot.message_handler(commands=['start'])
 def main(message):
-    i = False
-    for users in data["usersData"]:
-        if users == message.chat.id:
-            i = True
-    if i == False:
+    if str(message.chat.id) not in data["usersData"]:
         data["usersData"][str(message.chat.id)] = {}
         data["usersData"][str(message.chat.id)]["invited"] = {}
         data["usersData"][str(message.chat.id)]["invitedCol"] = 0
@@ -147,35 +143,32 @@ def main(message):
         save_data()
     conn = sql.connect('db.sql')
     cur = conn.cursor()
-    cur.execute('SELECT * FROM users')
-    users = cur.fetchall()
+    cur.execute('SELECT * FROM users WHERE chatID = ?', (message.chat.id,))
+    user = cur.fetchone()
     cur.close()
     conn.close()
-    ok = True
-    ccc = True
-    for el in users:
-        if el[3] == message.chat.id:
-            ok = False
-            if el[6] != 0:
-                ccc = False
-    if ccc == True:
-        if ok == True:
-            conn = sql.connect('db.sql')
-            cur = conn.cursor()
-            cur.execute('INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
-            tempData['usersData'][str(message.chat.id)] = {}
-            start_command = message.text
-            refer_id = str(start_command[7:])
-            if refer_id != "" and refer_id != str(message.chat.id):
-                data["usersData"][str(message.chat.id)]["inviter"] = int(refer_id)
-                data["usersData"][str(refer_id)]["invitedCol"]+=1
-                data["usersData"][str(message.chat.id)]["invited"][str(data["usersData"][str(refer_id)]["invitedCol"])] = message.chat.id
-                save_data()
-                cur.execute("UPDATE users SET diamonds = diamonds+10 WHERE chatID = ? OR chatID = ?", (refer_id, message.chat.id))
-                bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
-            conn.commit()
-            cur.close()
-            conn.close()
+    if user is None:
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (
+            message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
+        tempData['usersData'][str(message.chat.id)] = {}
+        start_command = message.text
+        refer_id = str(start_command[7:])
+        if refer_id != "" and refer_id != str(message.chat.id):
+            data["usersData"][str(message.chat.id)]["inviter"] = int(refer_id)
+            data["usersData"][str(refer_id)]["invitedCol"] += 1
+            data["usersData"][str(message.chat.id)]["invited"][
+                str(data["usersData"][str(refer_id)]["invitedCol"])] = message.chat.id
+            save_data()
+            cur.execute("UPDATE users SET diamonds = diamonds+10 WHERE chatID = ? OR chatID = ?",
+                        (refer_id, message.chat.id))
+            bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
+        conn.commit()
+        cur.close()
+        conn.close()
+    if user[6] == 1:
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -184,14 +177,10 @@ def main(message):
         markup.row(btnRus)
         markup.row(btn1488)
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
-    if ccc==False and ok == False:
+    else:
         Go_start(message)
 def go_education(message):
-    i = False
-    for users in data["education"]:
-        if users == str(message.chat.id):
-            i = True
-    if i == False or data['education'][str(message.chat.id)] == {}:
+    if str(message.chat.id) not in data["education"] or data['education'][str(message.chat.id)] == {}:
         data['education'][str(message.chat.id)]['completed_lesson'] = 0
         data['education'][str(message.chat.id)]['completed_tests'] = 0
         data['education'][str(message.chat.id)]['my_courses'] = {}
@@ -234,7 +223,7 @@ def completed_courses(message):
     for el in data['education'][str(message.chat.id)]['my_courses']:
         if data['education'][str(message.chat.id)]['my_courses'][el]["completed"] == True:
             i = lessonsData["courses"][str(el)]['name']
-            btn = types.InlineKeyboardButton(i, callback_data=f"courses:{el}")
+            btn = types.InlineKeyboardButton(i, callback_data=f"course:{el}")
             markup.add(btn)
     btn = types.InlineKeyboardButton("Назад", callback_data="my_courses")
     markup.add(btn)
@@ -250,7 +239,7 @@ def courses_list(message):
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
     for el in lessonsData["subjects"]:
-        btn = types.InlineKeyboardButton(lessonsData['subjects'][el], callback_data=f"courses_subject_list:{lessonsData['subjects'][el]}:{userClass}")
+        btn = types.InlineKeyboardButton(lessonsData['subjects'][el], callback_data=f"courses_subject_list:{el}:{userClass}")
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет", reply_markup=markup)
 def courses_subject_list(message, subject, userClass):
@@ -307,6 +296,12 @@ def lessons_list(message):
         btn = types.InlineKeyboardButton(lessonsData["subjects"][el], callback_data=f"lessons_subject_list:{el}:{userClass}")
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет", reply_markup=markup)
+
+def проверка_на_то_пройдены_ли_все_уроки_темы(userClass, chatID, theme):
+    for elem in lessonsData["lessons"]["themes"][f"{userClass}classThemes"][theme]["list"]:
+        if elem not in data['education'][str(chatID)]['my_courses']:
+            return True
+    return False
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('lessons_subject_list:'))
 def lessons_subject_list(callback):
     message, subject, userClass = callback.data.split(":")
@@ -316,8 +311,9 @@ def lessons_subject_list(callback):
     markup.add(btn)
     for el in lessonsData["lessons"]["themes"][f"{userClass}classThemes"]:
         if lessonsData["lessons"]["themes"][f"{userClass}classThemes"][el]["subject"] == subject:
-            btn = types.InlineKeyboardButton(el, callback_data=f"lessons_theme_list:{subject}:{userClass}:{el}")
-            markup.add(btn)
+            if проверка_на_то_пройдены_ли_все_уроки_темы(userClass, message.chat.id, el):
+                btn = types.InlineKeyboardButton(el, callback_data=f"lessons_theme_list:{subject}:{userClass}:{el}")
+                markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тему",reply_markup=markup)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('lessons_theme_list:'))
 def lessons_theme_list(call):
