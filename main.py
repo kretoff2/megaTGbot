@@ -323,8 +323,9 @@ def lessons_theme_list(call):
     btn = types.InlineKeyboardButton("Назад", callback_data=f"lessons_subject_list:{subject}:{userClass}")
     markup.add(btn)
     for el in lessonsData["lessons"]["themes"][f"{userClass}classThemes"][theme]["list"]:
-        btn = types.InlineKeyboardButton(lessonsData["lessons"][el]["name"], callback_data=f"lesson:{el}:1")
-        markup.add(btn)
+        if el not in data["education"][str(message.chat.id)]["complet_lessons"]:
+            btn = types.InlineKeyboardButton(lessonsData["lessons"][el]["name"], callback_data=f"lesson:{el}:1")
+            markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери урок",reply_markup=markup)
 def completed_lessons_list(message):
     markup = types.InlineKeyboardMarkup()
@@ -347,11 +348,41 @@ def tests_list(message):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Пройденные тесты", callback_data="completed_tests_list")
     markup.add(btn)
-    for el in lessonsData['tests']:
-        if el not in data['education'][str(message.chat.id)]['complet_tests'] and lessonsData["tests"][el]["class"] == userClass:
-            btn = types.InlineKeyboardButton(lessonsData['tests'][el]['name'], callback_data=f"test:{el}:1:0:False")
+    for el in lessonsData["subjects"]:
+        btn = types.InlineKeyboardButton(lessonsData["subjects"][el],callback_data=f"tests_subject_list:{el}:{userClass}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет",reply_markup=markup)
+
+def проверка_на_то_пройдены_ли_все_тесты_темы(userClass, chatID, theme):
+    for elem in lessonsData["tests"]["themes"][f"{userClass}classThemes"][theme]["list"]:
+        if elem not in data['education'][str(chatID)]["complet_tests"]:
+            return True
+    return False
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('tests_subject_list:'))
+def tests_list_subject(call):
+    message, subject, userClass = call.data.split(":")
+    message = call.message
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="tests_list")
+    markup.add(btn)
+    for el in lessonsData["tests"]["themes"][f"{userClass}classThemes"]:
+        if lessonsData["lessons"]["themes"][f"{userClass}classThemes"][el]["subject"] == subject:
+            if проверка_на_то_пройдены_ли_все_тесты_темы(userClass, message.chat.id, el):
+                btn = types.InlineKeyboardButton(el, callback_data=f"tests_theme_list:{subject}:{userClass}:{el}")
+                markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тему",reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('tests_theme_list:'))
+def tests_theme_list(call):
+    message, subject, userClass, theme = call.data.split(":")
+    message = call.message
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"tests_subject_list:{subject}:{userClass}")
+    markup.add(btn)
+    for el in lessonsData["tests"]["themes"][f"{userClass}classThemes"][theme]["list"]:
+        if el not in data["education"][str(message.chat.id)]["complet_tests"]:
+            btn = types.InlineKeyboardButton(lessonsData["tests"][el]["name"], callback_data=f"test:{el}:1:0:False")
             markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тест", reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тест",reply_markup=markup)
 def completed_tests_list(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="tests_list")
@@ -403,7 +434,7 @@ def start_test(message, testID, index, score, true=False):
             data['education'][str(message.chat.id)]['completed_tests']+=1
             i = 10/(index-1)*score
             t = data['education'][str(message.chat.id)]['GPA']
-            if data['education'][str(message.chat.id)]['completed_tests'] == 0: t = i
+            if data['education'][str(message.chat.id)]["completed_tests"] == 1: t = i
             data['education'][str(message.chat.id)]['GPA'] = round((i+t)/2, 2)
             data['education'][str(message.chat.id)]['complet_tests'][str(testID)]=1
         data['education'][str(message.chat.id)]['problems_solved'] += index - 1
