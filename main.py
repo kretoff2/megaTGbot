@@ -147,7 +147,6 @@ def main(message):
     user = cur.fetchone()
     cur.close()
     conn.close()
-    print(user)
     if user is None:
         conn = sql.connect('db.sql')
         cur = conn.cursor()
@@ -262,9 +261,9 @@ def start_course(message, courseID):
     info = f"Курс {lessonsData['courses'][str(courseID)]['name']}:\n{lessonsData['courses'][str(courseID)]['subtitle']}\n\nКласс: {lessonsData['courses'][str(courseID)]['class']}\nУроков: {len(lessonsData['courses'][str(courseID)]['lessons'])}\n\nРекомендации к курсу: {lessonsData['courses'][str(courseID)]['recommendations']}\n"
     if str(courseID) in data['education'][str(message.chat.id)]['my_courses']:
         info += f"Пройдено уроков: {data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons']}"
-    if data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] == True:
-        btn = types.InlineKeyboardButton("Обнулить курс", callback_data=f"course_back:{courseID}")
-        markup.add(btn)
+        if data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] == True:
+            btn = types.InlineKeyboardButton("Обнулить курс", callback_data=f"course_back:{courseID}")
+            markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
 def go_course_lesson(message, courseID):
     if str(courseID) in data['education'][str(message.chat.id)]['my_courses']:
@@ -300,7 +299,7 @@ def lessons_list(message):
 
 def проверка_на_то_пройдены_ли_все_уроки_темы(userClass, chatID, theme):
     for elem in lessonsData["lessons"]["themes"][f"{userClass}classThemes"][theme]["list"]:
-        if elem not in data['education'][str(chatID)]['my_courses']:
+        if elem not in data['education'][str(chatID)]["complet_lessons"]:
             return True
     return False
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('lessons_subject_list:'))
