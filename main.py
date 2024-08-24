@@ -3,12 +3,9 @@ from telebot import types
 import sqlite3 as sql
 import datetime
 from datetime import *
-import time
 import random
-import requests
 import os
 import json
-import array
 import config
 from pathlib import Path
 
@@ -26,6 +23,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary ke
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
 cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
+cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (userID int primary key, report int, selectClass int, selectSchool int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
@@ -180,6 +178,15 @@ def main(message):
     else:
         Go_start(message)
 def go_education(message):
+    conn = sql.connect("db.sql")
+    cur = conn.cursor()
+    cur.execute("SELECT class FROM users WHERE chatID = ?", (message.chat.id,))
+    userClass = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    if userClass is None:
+        bot.send_message(message.chat.id, "Для начала укажите в каком вы классе в личном кабинете. Класс можно менять только раз в месяц")
+        return
     if str(message.chat.id) not in data["education"] or data['education'][str(message.chat.id)] == {}:
         data['education'][str(message.chat.id)]['completed_lesson'] = 0
         data['education'][str(message.chat.id)]['completed_tests'] = 0
@@ -573,8 +580,10 @@ def school_info(message):
     conn = sql.connect('db.sql')
     cur = conn.cursor()
     cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
-    if cur.fetchone()[0] == None:
+    if cur.fetchone()[0] is None:
         bot.send_message(message.chat.id, "Сначала укажите класс в личном кабинете")
+        cur.close()
+        conn.close()
         return
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
     temp = cur.fetchone()
