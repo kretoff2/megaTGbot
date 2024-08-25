@@ -940,6 +940,7 @@ def callback(call):
         school = cur.fetchone()
         cur.execute('UPDATE users SET schoolID = ? WHERE chatID = ?', (school[0], call.message.chat.id))
         cur.execute('UPDATE users SET autorizationStep = ? WHERE chatID = ?', (1, call.message.chat.id))
+        cur.execute('UPDATE timeOuts SET selectSchool = ? WHERE chatID = ?', (datetime.now().timestamp(), call.message.chat.id))
         conn.commit()
         cur.close()
         conn.close()
@@ -978,6 +979,11 @@ def callback(call):
         infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "class_vibor":
+        conn = sql.connect('db.sql')
+        cur = conn.cursor()
+        cur.execute('SELECT selectClass FROM timeOuts')
+        cur.close()
+        conn.close()
         markup = types.InlineKeyboardMarkup()
         i = 0
         for i in range(0,11):
@@ -1012,6 +1018,7 @@ def callback(call):
         cur.execute('SELECT class FROM users WHERE chatID = ?', (call.message.chat.id,))
         temp = cur.fetchone()
         cur.execute('UPDATE users SET class = ? WHERE chatID = ?', (f'{temp[0]}"{callRazd[1]}"', call.message.chat.id))
+        cur.execute('UPDATE timeOuts SET selectClass = ? WHERE chatID = ?', (datetime.now().timestamp(), call.message.chat.id))
         conn.commit()
         cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (call.message.chat.id))
         info = cur.fetchone()
