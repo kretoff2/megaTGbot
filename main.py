@@ -8,6 +8,7 @@ import os
 import json
 import config
 from pathlib import Path
+import requests
 
 bot = telebot.TeleBot(config.bot)
 
@@ -23,7 +24,9 @@ cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary ke
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
 cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
-cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (userID int primary key, report int, selectClass int, selectSchool int)')
+cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int)')
+cur.execute('SELECT * FROM timeOuts')
+print(cur.fetchall())
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
@@ -166,17 +169,53 @@ def main(message):
         conn.commit()
         cur.close()
         conn.close()
-    if user[6] == 0:
+    elif user[6] == 0:
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
-        btn1488 = types.InlineKeyboardButton('1488', url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
         markup.row(btnBel)
         markup.row(btnRus)
-        markup.row(btn1488)
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
     else:
         Go_start(message)
+def gdz(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    conn = sql.connect("db.sql")
+    cur = conn.cursor()
+    cur.execute("SELECT class FROM users WHERE chatID = ?", (message.chat.id,))
+    userClass = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    for el in lessonsData["GDZ"]["by"]:
+        btn = types.InlineKeyboardButton(el, callback_data=f"GDZ_s:{userClass[0]}:{el}")
+        markup.add(btn)
+    bot.send_message(message.chat.id, "Выбери предмет", reply_markup=markup)
+
+#гдз для 8 класса
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:8:'))
+def gdz_s_8(call):
+    subject = call.data.split(":")[2]
+    message = call.message
+    if subject == "Русский язык":
+        bot.send_message(message.chat.id, "Введите номер упражнения")
+        bot.register_next_step_handler(message, gdz_rus_8)
+def gdz_rus_8(message):
+    try:
+        nomer = int(message.text)
+    except ValueError:
+        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
+        bot.register_next_step_handler(message, gdz_rus_8)
+        return
+    try:
+        response = requests.get(f'https://resheba.top/GDZ/8-russk-2018/0/{nomer}.png')
+        bot.send_photo(message.chat.id, response.content)
+    except:
+        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
+        return
+
+
 def go_education(message):
     conn = sql.connect("db.sql")
     cur = conn.cursor()
@@ -940,7 +979,7 @@ def callback(call):
         school = cur.fetchone()
         cur.execute('UPDATE users SET schoolID = ? WHERE chatID = ?', (school[0], call.message.chat.id))
         cur.execute('UPDATE users SET autorizationStep = ? WHERE chatID = ?', (1, call.message.chat.id))
-        cur.execute('UPDATE timeOuts SET selectSchool = ? WHERE chatID = ?', (datetime.now().timestamp(), call.message.chat.id))
+        cur.execute('INSERT INTO timeOuts (chatID, report, selectClass, selectSchool) VALUES ("%s", "%s", "%s", "%s")' % (call.message.chat.id, 0, 0, 0))
         conn.commit()
         cur.close()
         conn.close()
@@ -981,9 +1020,12 @@ def callback(call):
     elif callRazd[0] == "class_vibor":
         conn = sql.connect('db.sql')
         cur = conn.cursor()
-        cur.execute('SELECT selectClass FROM timeOuts')
+        cur.execute('SELECT selectClass FROM timeOuts WHERE chatID = ?', (call.message.chat.id,))
+        timeOut = int(cur.fetchone()[0])
         cur.close()
         conn.close()
+        if timeOut+2592000 > datetime.now().timestamp():
+            bot.send_message(call.message.chat.id, f"Вы сможете изменить класс только через {int((timeOut+2592000-datetime.now().timestamp())/86400)} дней") ######
         markup = types.InlineKeyboardMarkup()
         i = 0
         for i in range(0,11):
@@ -1056,7 +1098,7 @@ def callback(call):
     elif callRazd[0] == "rem_homeTask":
         rem_homeTask(call.message, callRazd[1], callRazd[2])
     elif callRazd[0] == "GDZ":
-        bot.send_message(call.message.chat.id, "Делай сам")
+        gdz(call.message)
     elif callRazd[0] == "see_dz_step_1":
         see_dz_step_1(call.message, callRazd[1], callRazd[2], callRazd[3])
     elif callRazd[0] == "new_name":
@@ -1233,6 +1275,7 @@ def else_school(message):
     data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"], data["usersData"][f"{message.chat.id}"]["sity"], message.text, len(schols),0))
     cur.execute(f'UPDATE users SET schoolID = {len(schols)} WHERE chatID = {message.chat.id}')
     cur.execute(f'UPDATE users SET autorizationStep = {1} WHERE chatID = {message.chat.id}')
+    cur.execute('INSERT INTO timeOuts (chatID, report, selectClass, selectSchool) VALUES ("%s", "%s", "%s", "%s")' % (message.chat.id, 0, 0, 0))
     conn.commit()
     cur.close()
     conn.close()
