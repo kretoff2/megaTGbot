@@ -25,8 +25,6 @@ cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key,
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
 cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int)')
-cur.execute('SELECT * FROM timeOuts')
-print(cur.fetchall())
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 
@@ -469,7 +467,7 @@ def start_lesson(message, lessonID, index):
     btn = types.InlineKeyboardButton("Закончить", callback_data='lessons_list')
     markup.add(btn)
     info = lessonsData["lessons"][lessonID]["text"][str(index)]
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup, parse_mode='HTML')
 def start_test(message, testID, index, score, true=False):
     markup = types.InlineKeyboardMarkup()
     question = ""
@@ -505,7 +503,7 @@ def start_test(message, testID, index, score, true=False):
             else:
                 btn = types.InlineKeyboardButton(lessonsData["tests"][testID]["questions"][f"{index}variants"][str(el)],callback_data=f'test:{testID}:{index+1}:{score}:False')
             markup.add(btn)
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=question, reply_markup=markup)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=question, reply_markup=markup, parse_mode='HTML')
 def sen_cheat_sheets_list(message, subject, userClass):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="cheat_sheets_list")
@@ -532,7 +530,7 @@ def sen_cheat_sheets(message, userClass, theme, cheat_sheetsID):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data=f"s_theme_list:{lessonsData['cheat_sheets'][f'{userClass}class'][theme]['subject']}:{userClass}:{theme}")
     markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=lessonsData['cheat_sheets'][f'{userClass}class'][theme][cheat_sheetsID]["text"], reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=lessonsData['cheat_sheets'][f'{userClass}class'][theme][cheat_sheetsID]["text"], reply_markup=markup, parse_mode='HTML')
 def Go_start(message):
     bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
 def save_data():
