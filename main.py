@@ -155,6 +155,7 @@ def main(message):
             'INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (
             message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
         tempData['usersData'][str(message.chat.id)] = {}
+        cur.execute('INSERT INTO clicker (chatID, clicks) VALUES (?, ?)', (message.chat.id, "0"))
         start_command = message.text
         refer_id = str(start_command[7:])
         if refer_id != "" and refer_id != str(message.chat.id):
