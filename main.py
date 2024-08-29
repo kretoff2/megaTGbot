@@ -551,6 +551,11 @@ def sen_cheat_sheets(message, userClass, Otheme, cheat_sheetsID):
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=lessonsData['cheat_sheets'][f'{userClass}class'][theme][cheat_sheetsID]["text"], reply_markup=markup, parse_mode='HTML')
 def Go_start(message):
     bot.send_message(message.chat.id, "Привет, я твой телеграм бот помощник. Что ты хочешь узнать?", reply_markup=my_markup())
+    if bot.get_chat_member(config.CHANEL_ID, message.chat.id).status not in ["member", "administrator", "creator"]:
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Подписаться", url="https://t.me/kretoffer_school_chanel")
+        markup.add(btn)
+        bot.send_message(message.chat.id,"Вы еще не подписаны на наш канал, там вы можете найти что-то интересное", reply_markup=markup)
 def save_data():
     with open('data.json', 'w') as f:
         json.dump(data, f)
