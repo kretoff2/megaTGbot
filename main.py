@@ -681,7 +681,7 @@ def rasp(message, schoolID, scholl_class, id):
             cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, i))
             rasp = cur.fetchone()
             if rasp != None:
-                info += "\n"+t[i]+":\n"
+                info += "\n<b>"+t[i]+":</b>\n"
                 j = 0
                 for j in range(0, 10):
                     if rasp[j + 3] != None:
@@ -692,7 +692,7 @@ def rasp(message, schoolID, scholl_class, id):
         conn.close()
         btn = types.InlineKeyboardButton("Изменить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}")
         markup.add(btn)
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info,reply_markup=markup)
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup, parse_mode='HTML')
         return
     cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, v))
     rasp = cur.fetchone()
@@ -816,8 +816,8 @@ def see_dz_step_1(message, schoolID, school_class, date):
     markup.add(btn)
     info = f"Дз на {date}\n\n"
     for el in dzs:
-        info += f"{el[2]}: {el[3]}\n"
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+        info += f"<b>{el[2]}:</b> {el[3]}\n"
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup, parse_mode='HTML')
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz:'))
 def ask_dz(call):
     message, schoolID, schoolClass = call.data.split(":")
@@ -874,6 +874,29 @@ def ask_dz_step_1(call):
     message, Odate, sub, schoolID, schoolClass = call.data.split(":")
     message = call.message
     bot.send_message(message.chat.id, "Если кто-то из твоих одноклассников ответит, то я тебе сообщу")
+    conn =sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT chatID FROM users WHERE schoolID = ? AND class = ?", (int(schoolID), schoolClass))
+    users = cur.fetchall()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Ответить", callback_data=f"repli_dz:{Odate}:{sub}:{message.chat.id}")
+    markup.add(btn)
+    for el in users:
+        bot.send_message(el[0], f"Твой одноклассник попросил скинуть ДЗ по предмету {sub} на {Odate}", reply_markup=markup)
+    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('repli_dz:'))
+def reply_for_homeTask_ask(call):
+    message, Odate, subject, id = call.data.split(":")
+    message = call.message
+    tempData["usersData"][str(message.chat.id)]["tempDate"], tempData["usersData"][str(message.chat.id)]["tempSubject"] = Odate, subject
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,text=f"Впиши дз по {subject} на {Odate}", reply_markup=markup)
+    bot.register_next_step_handler(message, add_homeTask_step_3)
+    bot.send_message(message.chat.id, "Дз которое вы просили добавлено")
 def add_homeTask(message, schoolID, school_class):
     today = datetime.today().date()
     todaySPL = str(today).split('-')
