@@ -168,6 +168,7 @@ def main(message):
         cur.close()
         conn.close()
     elif user[6] == 0:
+        bot.send_message(message.chat.id, "Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.")
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -798,6 +799,8 @@ def see_dz(message, schoolID, school_class, id):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Удалить дз", callback_data=f"rem_homeTask:{schoolID}:{school_class}")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Спросить дз", callback_data=f'ask_dz:{schoolID}:{school_class}')
+    markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери день",reply_markup=markup)
 def see_dz_step_1(message, schoolID, school_class, date):
     conn = sql.connect(f'./sqls/{schoolID}.sql')
@@ -809,10 +812,68 @@ def see_dz_step_1(message, schoolID, school_class, date):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data=f'homeTask:{schoolID}:{school_class}:0')
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Спросить дз", callback_data=f"ask_dz_s1:{date}:{schoolID}:{school_class}")
+    markup.add(btn)
     info = f"Дз на {date}\n\n"
     for el in dzs:
         info += f"{el[2]}: {el[3]}\n"
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz:'))
+def ask_dz(call):
+    message, schoolID, schoolClass = call.data.split(":")
+    message = call.message
+    today = datetime.today().date()
+    todaySPL = str(today).split('-')
+    i = 0
+    d = int(todaySPL[2])
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{schoolClass}:0")
+    markup.add(btn)
+    for i in range(0, 10):
+        btn = types.InlineKeyboardButton(f'{d}.{todaySPL[1]}.{todaySPL[0]}',callback_data=f"ask_dz_s1:{d}.{todaySPL[1]}.{todaySPL[0]}:{schoolID}:{schoolClass}")
+        markup.add(btn)
+        d += 1
+        if d >= 32:
+            d = 1
+            todaySPL[1] = int(todaySPL[1])+1
+            if todaySPL[1]>=13:
+                todaySPL[1]=1
+                todaySPL[0] = int(todaySPL[0]+1)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,text="Выбери дату (Обратите внимание на 31 число, его может не быть в месяце)",reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz_s1:'))
+def ask_dz_step_1(call):
+    message, Odate, schoolID, my_class = call.data.split(":")
+    date = datetime.strptime(Odate, '%d.%m.%Y')
+    weekday = date.weekday()
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM rasp WHERE day = ? AND class = ?', (weekday, my_class))
+    rasp = cur.fetchone()
+    if rasp is None:
+        bot.send_message(call.message.chat.id, "Расписание не задано")
+        return
+    cur.execute('SELECT predmet FROM dz WHERE date = ? AND class = ?', (Odate, my_class))
+    dzs = cur.fetchall()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{my_class}:0")
+    markup.add(btn)
+    i = 0
+    for i in range(0,10):
+        i += 1
+        if rasp[i+2] != None:
+            b = True
+            for el in dzs:
+                if el[0] == rasp[i+2]:
+                    b = False
+            if b == True:
+                btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"ask_dz_s2:{Odate}:{rasp[i+2]}:{schoolID}:{my_class}")
+                markup.add(btn)
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz_s2:'))
+def ask_dz_step_1(call):
+    message, Odate, sub, schoolID, schoolClass = call.data.split(":")
+    message = call.message
+    bot.send_message(message.chat.id, "Если кто-то из твоих одноклассников ответит, то я тебе сообщу")
 def add_homeTask(message, schoolID, school_class):
     today = datetime.today().date()
     todaySPL = str(today).split('-')
@@ -821,12 +882,16 @@ def add_homeTask(message, schoolID, school_class):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data=f"homeTask:{schoolID}:{school_class}:0")
     markup.add(btn)
-    for i in range(0,10):
+    for i in range(0, 10):
         btn = types.InlineKeyboardButton(f'{d}.{todaySPL[1]}.{todaySPL[0]}', callback_data=f"add_homeTask_step_1:{d}.{todaySPL[1]}.{todaySPL[0]}")
         markup.add(btn)
-        d+=1
+        d += 1
         if d >= 32:
-            d=1
+            d = 1
+            todaySPL[1] = int(todaySPL[1]) + 1
+            if todaySPL[1] >= 13:
+                todaySPL[1] = 1
+                todaySPL[0] = int(todaySPL[0] + 1)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери дату (Обратите внимание на 31 число, его может не быть в месяце)", reply_markup=markup)
 def add_homeTask_step_1(message):
     global tempData
@@ -845,6 +910,9 @@ def add_homeTask_step_1(message):
     cur = conn.cursor()
     cur.execute('SELECT * FROM rasp WHERE day = ? AND class = ?', (weekday, my_class[0]))
     rasp = cur.fetchone()
+    if rasp is None:
+        bot.send_message(message.chat.id, "Расписание не задано")
+        return
     cur.execute('SELECT predmet FROM dz WHERE date = ? AND class = ?', (ttempData, my_class[0]))
     dzs = cur.fetchall()
     markup = types.InlineKeyboardMarkup()
@@ -1040,7 +1108,8 @@ def callback(call):
         cur.close()
         conn.close()
         if timeOut+2592000 > datetime.now().timestamp():
-            bot.send_message(call.message.chat.id, f"Вы сможете изменить класс только через {int((timeOut+2592000-datetime.now().timestamp())/86400)} дней") ######
+            bot.send_message(call.message.chat.id, f"Вы сможете изменить класс только через {int((timeOut+2592000-datetime.now().timestamp())/86400)} дней")
+            return
         markup = types.InlineKeyboardMarkup()
         i = 0
         for i in range(0,11):
@@ -1125,7 +1194,6 @@ def callback(call):
         message = tempData["usersData"][str(callRazd[1])]["tempMessage"]
         bot.register_next_step_handler(message, new_last_name)
     elif callRazd[0] == "add_homeTask_step_1":
-        print(call.message)
         tempData["usersData"][str(call.message.chat.id)]["tempDate"] = callRazd[1]
         add_homeTask_step_1(call.message)
     elif callRazd[0] == "add_homeTask_step_2":
