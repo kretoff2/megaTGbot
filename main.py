@@ -556,8 +556,12 @@ def start_lesson(message, lessonID, index):
             data['education'][str(message.chat.id)]['completed_lesson']+=1
             data['education'][str(message.chat.id)]['complet_lessons'][str(lessonID)]=1
         save_data()
-        btn = types.InlineKeyboardButton("Пройти тест", callback_data=f'test:{lessonsData["lessons"][lessonID]["test"]}:1:0:False')
-        markup.add(btn)
+        if lessonsData["lessons"][lessonID]["test"] != None:
+            btn = types.InlineKeyboardButton("Пройти тест", callback_data=f'test:{lessonsData["lessons"][lessonID]["test"]}:1:0:False')
+            markup.add(btn)
+        if "videoLesson" in lessonsData["lessons"][lessonID] and lessonsData["lessons"][lessonID]["videoLesson"] != None:
+            btn = types.InlineKeyboardButton("Видеоурок", url=lessonsData["lessons"][lessonID]["videoLesson"])
+            markup.add(btn)
     else:
         btn = types.InlineKeyboardButton("Дальше", callback_data=f'lesson:{lessonID}:{index+1}')
         markup.add(btn)
@@ -601,6 +605,15 @@ def start_test(message, testID, index, score, true=False):
                 btn = types.InlineKeyboardButton(lessonsData["tests"][testID]["questions"][f"{index}variants"][str(el)],callback_data=f'test:{testID}:{index+1}:{score}:False')
             markup.add(btn)
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=question, reply_markup=markup, parse_mode='HTML')
+#Не используется, не получается отправить видео
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('videoLesson:'))
+def videoLesson(call):
+    lessonId = call.data.split(":")[1]
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Закончить", callback_data='lessons_list')
+    markup.add(btn)
+    bot.send_video(call.message.chat.id, lessonsData["lessons"][lessonId]["videoLesson"])
+    bot.delete_message(call.message.chat.id, call.message.message_id)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('cs_subject_list:'))
 def cs_subject_list(call):
     message, subject, userClass = call.data.split(":")
