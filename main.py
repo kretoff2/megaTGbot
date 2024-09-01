@@ -670,6 +670,9 @@ def my_room(message):
     info = cur.fetchone()
     cur.close()
     conn.close()
+    if info is None or info[6] == 0:
+        bot.send_message(message.chat.id, "Что-то пошло не так, похоже вы не зарегестрировались, пропишите /start")
+        return
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
     markup.add(btn)
