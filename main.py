@@ -28,6 +28,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key,
 cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
+#cur.execute("UPDATE users SET coins = 100000 WHERE chatID = ?", (config.ADMIN_ID,))
 
 conn.commit()
 
@@ -68,7 +69,8 @@ def my_markup():
     markup.add(btn)
     btn = types.KeyboardButton("Школа 🏫")
     markup.add(btn)
-    btn = types.KeyboardButton("Школа kretoffer'a 💻")
+    #btn = types.KeyboardButton("Школа kretoffer'a 💻")
+    btn = types.KeyboardButton("Магазин 🛍️")
     markup.add(btn)
     return markup
 @bot.message_handler(commands=['delOldDz'])
@@ -178,6 +180,68 @@ def main(message):
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
     else:
         Go_start(message)
+
+def openShop(message):
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE chatID = ?", (message.chat.id,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Алмазы за монеты", callback_data="buy_diamonds_1")
+    markup.add(btn)
+    bot.send_message(message.chat.id, f"<b>Баланс:</b>\nМонеты:{user[10]}\nАлмазы:{user[11]}\n\n<b>Магазин:</b>", reply_markup=markup, parse_mode='HTML')
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_diamonds_1"))
+def buy_diamonds_1(call):
+    markup = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton("1", callback_data="buy:diamonds:1")
+    btn2 = types.InlineKeyboardButton("10", callback_data="buy:diamonds:10")
+    btn3 = types.InlineKeyboardButton("100", callback_data="buy:diamonds:100")
+    markup.row(btn1, btn2, btn3)
+    bot.send_message(call.message.chat.id, "1 алмаз стоит 100 монет, выберите количество алмазов", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy:diamonds:"))
+def buy_diamonds(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    col = int(call.data.split(":")[2])
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT coins FROM users WHERE chatID = ?", (call.message.chat.id,))
+    coins = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    price = col*100
+    info = "Подтвердите покупку"
+    if col >= 100:
+        price = col*75
+        info = "Для вас действует скидка 25%, подтвердите покупку"
+    if price > coins:
+        bot.send_message(call.message.chat.id, f"У вас недостаточно монет, вам нужно {price}")
+        return
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Купить", callback_data=f"buy_diamonds:{col}:{price}")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Отмена", callback_data=f"cancel_buy")
+    markup.add(btn)
+    bot.send_message(call.message.chat.id, info, reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("cancel_buy"))
+def cancel(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, "Покупка отменена")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_diamonds:"))
+def buy_diamonds_2(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    message, colStr, priseStr = call.data.split(":")
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET diamonds = diamonds + ? WHERE chatID = ?", (colStr, call.message.chat.id))
+    cur.execute("UPDATE users SET coins = coins - ? WHERE chatID = ?", (priseStr, call.message.chat.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(call.message.chat.id, "Покупка успешно совершена")
 def gdz(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
@@ -411,8 +475,8 @@ def gdz_geom_8(message):
         return
 
 #ГДЗ 7 класс
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:8:'))
-def gdz_s_8(call):
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:7:'))
+def gdz_s_7(call):
     subject = call.data.split(":")[2]
     message = call.message
     if subject == "Русский язык":
@@ -1542,6 +1606,8 @@ def main(message):
         school_info(message)
     elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
+    elif message.text == "Магазин 🛍️":
+        openShop(message)
     else:
         if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил"]:
             bot.send_message(message.chat.id, f"Сам {message.text.lower()}! 😤")
@@ -1562,7 +1628,7 @@ def report(call):
         bot.send_message(call.message.chat.id, "Репорты можно отправлять один раз в 12 часов или чаще если репорт окажется полезным")
         return
     bot.delete_message(call.message.chat.id, call.message.message_id)
-    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена"', reply_markup=cancel_markup)
+    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена". Если он окажется полезным, то вы получите 2 алмаза', reply_markup=cancel_markup)
     bot.register_next_step_handler(call.message, report_send)
 def report_send(message):
     if message.text.lower() == "отмена":
@@ -1585,6 +1651,7 @@ def good_report_btn(call):
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?",(datetime.now().timestamp(), int(userIdStr)))
+    cur.execute("UPDATE users SET diamonds = diamonds + 2 WHERE chatID = ?", (message.chat.id,))
     conn.commit()
     cur.close()
     conn.close()
