@@ -9,6 +9,7 @@ import json
 import config
 from pathlib import Path
 import requests
+from my_libs.markups import *
 
 bot = telebot.TeleBot(config.bot)
 
@@ -1152,7 +1153,7 @@ def main(message):
     if message.text == "Личный кабинет 🪪":
         my_room(message)
     elif message.text == "Настройки ⚙️":
-        bot.send_message(message.chat.id, "Раздел находится в разработке")
+        bot.send_message(message.chat.id, "Раздел находится в разработке", reply_markup=settings_markup)
     elif message.text == "Обучение 📖":
         go_education(message)
     elif message.text == "Школа 🏫":
@@ -1160,11 +1161,74 @@ def main(message):
     elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
     else:
-        if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший"]:
+        if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил"]:
             bot.send_message(message.chat.id, f"Сам {message.text.lower()}! 😤")
             return
         bot.send_message(message.chat.id, "Я вас не понимаю")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("report_btn"))
+def report(call):
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT report from timeOuts WHERE chatID = ?", (call.message.chat.id,))
+    t = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    if t > datetime.now().timestamp():
+        if t > datetime.now().timestamp()+43200:
+            bot.send_message(call.message.chat.id, "Вам временно запрещено отправлять репорты")
+            return
+        bot.send_message(call.message.chat.id, "Репорты можно отправлять один раз в 12 часов или чаще если репорт окажется полезным")
+        return
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена"', reply_markup=cancel_markup)
+    bot.register_next_step_handler(call.message, report_send)
+def report_send(message):
+    if message.text.lower() == "отмена":
+        bot.send_message(message.chat.id, "Репорт не отправлен")
+        return
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?", (datetime.now().timestamp()+43200, message.chat.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(config.ADMIN_ID, f"Пользователь @{message.from_user.username} отправил репорт", reply_markup=report_repli_markup(message.chat.id))
+    bot.forward_message(config.ADMIN_ID, message.chat.id, message.message_id)
+    bot.send_message(message.chat.id, "Репорт отправлен, если что, то с вами свяжется администрация. Если же сообщение окажется спамом, то вам заблокируют отправку репортов на 2 недели. Репорты можно отправлять 1 раз в час", reply_markup=my_markup())
 
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('good_report:'))
+def good_report_btn(call):
+    message, userIdStr = call.data.split(":")
+    message = call.message
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?",(datetime.now().timestamp(), int(userIdStr)))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(message.chat.id, "Репорт отменчен как полезный")
+    bot.send_message(int(userIdStr), "Ваш репорт отмечен как полезный и вы можете написать новый")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('bad_report:'))
+def bad_report_btn(call):
+    message, userIdStr = call.data.split(":")
+    message = call.message
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?",(datetime.now().timestamp()+1209600, int(userIdStr)))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(message.chat.id, "Репорт отменчен как спам")
+    bot.send_message(int(userIdStr), "Ваш репорт отмечен как спам и вы не сможете писать новые в течении 2 недель")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('reply_report:'))
+def reply_report_btn(call):
+    message, userIdStr = call.data.split(":")
+    message = call.message
+    bot.send_message(message.chat.id, "Напишите ответ")
+    bot.register_next_step_handler(message, reply_report, int(userIdStr))
+def reply_report(message, userID):
+    bot.send_message(userID, f"Администратор {message.from_user.username} ответил на ваш репорт\n\n<b>Ответ:</b>\n{message.text}", parse_mode='HTML')
+    bot.send_message(message.chat.id, "Ответ отправлен", reply_markup=my_markup())
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     global data
