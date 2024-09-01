@@ -664,7 +664,7 @@ def save_data():
     with open('data.json', 'w') as f:
         json.dump(data, f)
 def my_room(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT * FROM users WHERE chatID = "%s"'%(message.chat.id))
     info = cur.fetchone()
@@ -1153,6 +1153,15 @@ def kretoffSchool(message):
     bot.send_message(message.chat.id, "В разработке", reply_markup=markup)
 @bot.message_handler()
 def main(message):
+    conn = sql.connect('db.sql')
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (message.chat.id))
+    info = cur.fetchone()
+    cur.close()
+    conn.close()
+    if info is None or info[6] == 0:
+        bot.send_message(message.chat.id, "Что-то пошло не так, похоже вы не зарегестрировались, пропишите /start")
+        return
     if message.text == "Личный кабинет 🪪":
         my_room(message)
     elif message.text == "Настройки ⚙️":
