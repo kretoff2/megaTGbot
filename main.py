@@ -296,7 +296,7 @@ def courses_list_else(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
-    classes = [7,8]
+    classes = config.classes
     for el in classes:
         btn = types.InlineKeyboardButton(str(el), callback_data=f"courses_subject_list_else:{el}")
         markup.add(btn)
@@ -372,7 +372,7 @@ def courses_list_else(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
-    classes = [7,8]
+    classes = config.classes
     for el in classes:
         btn = types.InlineKeyboardButton(str(el), callback_data=f"lessons_subject_list_else:{el}")
         markup.add(btn)
@@ -454,7 +454,7 @@ def courses_list_else(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
-    classes = [7,8]
+    classes = config.classes
     for el in classes:
         btn = types.InlineKeyboardButton(str(el), callback_data=f"tests_subject_list_else:{el}")
         markup.add(btn)
@@ -534,7 +534,7 @@ def courses_list_else(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
-    classes = [7,8]
+    classes = config.classes
     for el in classes:
         btn = types.InlineKeyboardButton(str(el), callback_data=f"cs_subject_list_else:{el}")
         markup.add(btn)
