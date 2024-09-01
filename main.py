@@ -686,10 +686,11 @@ def courses_subject_list(message, subject, userClass):
     btn = types.InlineKeyboardButton("Назад", callback_data="courses_list")
     markup.add(btn)
     for el in lessonsData['courses']:
-        if lessonsData["courses"][el]["subject"] == subject and lessonsData["courses"][el]["class"] == userClass:
-            if el not in data['education'][str(message.chat.id)]['my_courses'] or data['education'][str(message.chat.id)]['my_courses'][el]['completed'] != True:
-                btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
-                markup.add(btn)
+        if el != "_comment":
+            if lessonsData["courses"][el]["subject"] == subject and lessonsData["courses"][el]["class"] == userClass:
+                if el not in data['education'][str(message.chat.id)]['my_courses'] or data['education'][str(message.chat.id)]['my_courses'][el]['completed'] != True:
+                    btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
+                    markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери курс",reply_markup=markup)
 def start_course(message, courseID):
     markup = types.InlineKeyboardMarkup()
