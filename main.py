@@ -18,7 +18,12 @@ tempData = {
 
     }
 }
-conn = sql.connect('db.sql')
+
+def sql_conn():
+    conn = sql.connect("db.sql")
+    return conn
+
+conn = sql_conn()
 cur = conn.cursor()
 cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class varchar(6))')
 cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50), rating int)')
@@ -28,6 +33,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key,
 cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
+#cur.execute("UPDATE users SET coins = 100000 WHERE chatID = ?", (config.ADMIN_ID,))
 
 conn.commit()
 
@@ -47,10 +53,6 @@ data = {
     }
 }
 
-def sql_conn():
-    conn = sql.connect("db.sql")
-    return conn
-
 lessonsData = {}
 if not os.path.exists('./data.json'):
     with open('data.json', 'w') as f:
@@ -68,7 +70,8 @@ def my_markup():
     markup.add(btn)
     btn = types.KeyboardButton("Школа 🏫")
     markup.add(btn)
-    btn = types.KeyboardButton("Школа kretoffer'a 💻")
+    #btn = types.KeyboardButton("Школа kretoffer'a 💻")
+    btn = types.KeyboardButton("Магазин 🛍️")
     markup.add(btn)
     return markup
 @bot.message_handler(commands=['delOldDz'])
@@ -76,7 +79,14 @@ def main(message):
     if message.chat.id != config.ADMIN_ID:
         bot.send_message(message.chat.id, "Недостаточнго прав")
     delOldDz(message)
-
+def delTempSchools():
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM schools WHERE school = null')
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Временные школы удалены")
 def delOldDz(message=None):
     folder_name = "sqls"
     folder = Path(folder_name)
@@ -121,7 +131,7 @@ def allMesage(message):
   if message.text.strip().lower() == "отмена":
     bot.send_message(message.chat.id, "отмена прошла успешно")
     return
-  conn = sql.connect('db.sql')
+  conn = sql_conn()
   cur = conn.cursor()
 
   cur.execute('SELECT * FROM users')
@@ -132,7 +142,7 @@ def allMesage(message):
 
   for el in users:
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'go'])
 def main(message):
     if str(message.chat.id) not in data["usersData"]:
         data["usersData"][str(message.chat.id)] = {}
@@ -141,14 +151,14 @@ def main(message):
         data["usersData"][str(message.chat.id)]["inviter"] = None
         data["education"][str(message.chat.id)] = {}
         save_data()
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT * FROM users WHERE chatID = ?', (message.chat.id,))
     user = cur.fetchone()
     cur.close()
     conn.close()
     if user is None:
-        conn = sql.connect('db.sql')
+        sql_conn()
         cur = conn.cursor()
         cur.execute(
             'INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (
@@ -178,11 +188,73 @@ def main(message):
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
     else:
         Go_start(message)
+
+def openShop(message):
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE chatID = ?", (message.chat.id,))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Алмазы за монеты", callback_data="buy_diamonds_1")
+    markup.add(btn)
+    bot.send_message(message.chat.id, f"<b>Баланс:</b>\nМонеты:{user[10]}\nАлмазы:{user[11]}\n\n<b>Магазин:</b>", reply_markup=markup, parse_mode='HTML')
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_diamonds_1"))
+def buy_diamonds_1(call):
+    markup = types.InlineKeyboardMarkup()
+    btn1 = types.InlineKeyboardButton("1", callback_data="buy:diamonds:1")
+    btn2 = types.InlineKeyboardButton("10", callback_data="buy:diamonds:10")
+    btn3 = types.InlineKeyboardButton("100", callback_data="buy:diamonds:100")
+    markup.row(btn1, btn2, btn3)
+    bot.send_message(call.message.chat.id, "1 алмаз стоит 100 монет, выберите количество алмазов", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy:diamonds:"))
+def buy_diamonds(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    col = int(call.data.split(":")[2])
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT coins FROM users WHERE chatID = ?", (call.message.chat.id,))
+    coins = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    price = col*100
+    info = "Подтвердите покупку"
+    if col >= 100:
+        price = col*75
+        info = "Для вас действует скидка 25%, подтвердите покупку"
+    if price > coins:
+        bot.send_message(call.message.chat.id, f"У вас недостаточно монет, вам нужно {price}")
+        return
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Купить", callback_data=f"buy_diamonds:{col}:{price}")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Отмена", callback_data=f"cancel_buy")
+    markup.add(btn)
+    bot.send_message(call.message.chat.id, info, reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("cancel_buy"))
+def cancel(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, "Покупка отменена")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_diamonds:"))
+def buy_diamonds_2(call):
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    message, colStr, priseStr = call.data.split(":")
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET diamonds = diamonds + ? WHERE chatID = ?", (colStr, call.message.chat.id))
+    cur.execute("UPDATE users SET coins = coins - ? WHERE chatID = ?", (priseStr, call.message.chat.id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(call.message.chat.id, "Покупка успешно совершена")
 def gdz(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
-    conn = sql.connect("db.sql")
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute("SELECT class FROM users WHERE chatID = ?", (message.chat.id,))
     userClass = cur.fetchone()[0]
@@ -411,8 +483,8 @@ def gdz_geom_8(message):
         return
 
 #ГДЗ 7 класс
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:8:'))
-def gdz_s_8(call):
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:7:'))
+def gdz_s_7(call):
     subject = call.data.split(":")[2]
     message = call.message
     if subject == "Русский язык":
@@ -587,7 +659,7 @@ def gdz_geom_7(message):
         return
 
 def go_education(message):
-    conn = sql.connect("db.sql")
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute("SELECT class FROM users WHERE chatID = ?", (message.chat.id,))
     userClass = cur.fetchone()[0]
@@ -1079,7 +1151,7 @@ def main(message):
   bot.register_next_step_handler(message, delAdmin)
 
 def delAdmin(message):
-  conn = sql.connect('db.sql')
+  conn = sql_conn()
   cur = conn.cursor()
   cur.execute('SELECT * FROM admins')
   cur.execute('DELETE FROM admins WHERE name = "%s"' % (message.text.strip()))
@@ -1091,7 +1163,7 @@ def addAdmin(message):
   if (message.text.strip().lower() == 'отмена'):
     bot.send_message(message.chat.id, 'Отменено')
     return
-  conn = sql.connect('db.sql')
+  conn = sql_conn()
   cur = conn.cursor()
 
   cur.execute('SELECT * FROM users')
@@ -1115,7 +1187,7 @@ def addAdmin(message):
   conn.close()
 
 def school_info(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
     if cur.fetchone()[0] is None:
@@ -1219,7 +1291,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
                 "Русская лит.", "Белорусская лит.", "Человек и мир", "Всемирная истроия",
                 "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
                 "Химия", "Обществоведение", "Допризыв. под.", "Мед. подготовка", "Черчение",
-                "Астрономия"}
+                "Астрономия", "Физ.культ./ЧЗС"}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
@@ -1404,7 +1476,7 @@ def add_homeTask_step_1(message):
     ttempData = tempData["usersData"][str(message.chat.id)]["tempDate"]
     date = datetime.strptime(ttempData, '%d.%m.%Y')
     weekday = date.weekday()
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
     schoolID = cur.fetchone()
@@ -1445,7 +1517,7 @@ def add_homeTask_step_2(message, date, subject):
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Впиши дз по {subject} на {date}", reply_markup=markup)
     bot.register_next_step_handler(message, add_homeTask_step_3)
 def add_homeTask_step_3(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
     t = cur.fetchone()
@@ -1510,6 +1582,7 @@ def rem_dz_step_2(message, schoolID, school_class, date, subject):
     bot.send_message(message.chat.id, "Дз успешно удалено")
     see_dz(message, schoolID, school_class, 0)
 def create_new_scholl_db(schoolID):
+    bot.send_message(config.ADMIN_ID, f"Создана новая школа с ID: {schoolID}")
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
     cur.execute('CREATE TABLE IF NOT EXISTS rasp (id int auto_increment primary key, class varchar(6), day int, lesson1 varchar(25), lesson2 varchar(25), lesson3 varchar(25), lesson4 varchar(25), lesson5 varchar(25), lesson6 varchar(25), lesson7 varchar(25), lesson8 varchar(25), lesson9 varchar(25), lesson10 varchar(25))')
@@ -1524,7 +1597,7 @@ def kretoffSchool(message):
     bot.send_message(message.chat.id, "В разработке", reply_markup=markup)
 @bot.message_handler()
 def main(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (message.chat.id))
     info = cur.fetchone()
@@ -1543,6 +1616,8 @@ def main(message):
         school_info(message)
     elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
+    elif message.text == "Магазин 🛍️":
+        openShop(message)
     else:
         if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил"]:
             bot.send_message(message.chat.id, f"Сам {message.text.lower()}! 😤")
@@ -1563,7 +1638,7 @@ def report(call):
         bot.send_message(call.message.chat.id, "Репорты можно отправлять один раз в 12 часов или чаще если репорт окажется полезным")
         return
     bot.delete_message(call.message.chat.id, call.message.message_id)
-    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена"', reply_markup=cancel_markup)
+    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена". Если он окажется полезным, то вы получите 2 алмаза', reply_markup=cancel_markup)
     bot.register_next_step_handler(call.message, report_send)
 def report_send(message):
     if message.text.lower() == "отмена":
@@ -1586,6 +1661,7 @@ def good_report_btn(call):
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?",(datetime.now().timestamp(), int(userIdStr)))
+    cur.execute("UPDATE users SET diamonds = diamonds + 2 WHERE chatID = ?", (message.chat.id,))
     conn.commit()
     cur.close()
     conn.close()
@@ -1618,23 +1694,28 @@ def callback(call):
     callRazd = call.data.split(':')
     if callRazd[0] == "first_register_step":
         data["usersData"][str(call.message.chat.id)]["contry"] = callRazd[1]
+        save_data()
         send_vibor_obl(call)
     elif callRazd[0] == "second_register_step":
         data["usersData"][str(call.message.chat.id)]["obl"] = callRazd[1]
+        save_data()
         send_vibor_sity(call.message)
     elif callRazd[0] == "second_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название области").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_obl)
     elif callRazd[0] == "serd_register_step":
         data["usersData"][str(call.message.chat.id)]["sity"] = callRazd[1]
+        save_data()
         send_vibor_school(call.message)
     elif callRazd[0] == "serd_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название города").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_sity)
     elif callRazd[0] == "fourth_register_step":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute(f"SELECT schoolID FROM schools WHERE school = ?",(callRazd[1],))
         school = cur.fetchone()
@@ -1647,11 +1728,12 @@ def callback(call):
         bot.send_message(call.message.chat.id, "Вы успешно зарегистрированы")
         Go_start(call.message)
     elif callRazd[0] == "fourth_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
-        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        bot.delete_message(call.message.chat.id, call.message.message_id)
+        tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название/номер школы").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_school)
     elif callRazd[0] == "school_info":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute(f"SELECT * FROM schools WHERE schoolID = ?", (int(callRazd[1]),))
         info = cur.fetchone()
@@ -1665,7 +1747,7 @@ def callback(call):
         markup.add(btn)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "back_to_my_room":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute('SELECT * FROM users WHERE chatID = "%s"' % (call.message.chat.id))
         info = cur.fetchone()
@@ -1679,7 +1761,7 @@ def callback(call):
         infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(call.message.chat.id)]['invitedCol']}"
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=infoText, reply_markup=markup)
     elif callRazd[0] == "class_vibor":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute('SELECT selectClass FROM timeOuts WHERE chatID = ?', (call.message.chat.id,))
         timeOut = int(cur.fetchone()[0])
@@ -1696,7 +1778,7 @@ def callback(call):
             markup.add(btn)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери класс",reply_markup=markup)
     elif callRazd[0] == "set_class":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute('UPDATE users SET class = ? WHERE chatID = ?', (callRazd[1], call.message.chat.id))
         conn.commit()
@@ -1717,7 +1799,7 @@ def callback(call):
         markup.add(btn1, btn2, btn3)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери класс", reply_markup=markup)
     elif callRazd[0] == "set_class_letter":
-        conn = sql.connect('db.sql')
+        conn = sql_conn()
         cur = conn.cursor()
         cur.execute('SELECT class FROM users WHERE chatID = ?', (call.message.chat.id,))
         temp = cur.fetchone()
@@ -1820,7 +1902,7 @@ def callback(call):
     elif callRazd[0] == "courses_subject_list":
         courses_subject_list(call.message, callRazd[1], int(callRazd[2]))
 def new_name(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('UPDATE users SET first_name = ? WHERE chatID = ?', (message.text, message.chat.id))
     conn.commit()
@@ -1828,7 +1910,7 @@ def new_name(message):
     conn.close()
     my_room(message)
 def new_last_name(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('UPDATE users SET last_name = ? WHERE chatID = ?', (message.text, message.chat.id))
     conn.commit()
@@ -1839,7 +1921,7 @@ def new_last_name(message):
 def send_vibor_obl(call):
     markup = types.InlineKeyboardMarkup()
 
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     temp = data["usersData"][f"{call.message.chat.id}"]["contry"]
     cur.execute('SELECT obl FROM schools WHERE contry = ?', (temp,))
@@ -1859,22 +1941,16 @@ def send_vibor_obl(call):
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text='Выбери область',reply_markup=markup)
 
 def else_obl(message):
-    conn = sql.connect('db.sql')
-    cur = conn.cursor()
-    cur.execute('INSERT INTO schools (contry, obl) VALUES ("%s", "%s")' % (data["usersData"][f"{message.chat.id}"]["contry"], message.text))
-    conn.commit()
-    cur.close()
-    conn.close()
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["obl"] = message.text
     save_data()
-    send_vibor_sity(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
+    send_vibor_sity(message)
 
 def send_vibor_sity(message):
     markup = types.InlineKeyboardMarkup()
 
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT sity FROM schools WHERE contry = ? AND obl = ?', (data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"]))
     sitys = cur.fetchall()
@@ -1890,25 +1966,19 @@ def send_vibor_sity(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Друой", callback_data=f"serd_register_step_else")
     markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери город',reply_markup=markup)
+    bot.send_message(chat_id=message.chat.id, text='Выбери город',reply_markup=markup)
 
 def else_sity(message):
-    conn = sql.connect('db.sql')
-    cur = conn.cursor()
-    cur.execute('INSERT INTO schools (contry, obl, sity) VALUES ("%s", "%s", "%s")' % (data["usersData"][f"{message.chat.id}"]["contry"],data["usersData"][f"{message.chat.id}"]["obl"],  message.text))
-    conn.commit()
-    cur.close()
-    conn.close()
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["sity"] = message.text
     save_data()
-    send_vibor_school(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
+    send_vibor_school(message)
 
 def send_vibor_school(message):
     markup = types.InlineKeyboardMarkup()
 
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT school FROM schools WHERE contry = ? AND obl = ? AND sity = ?',
                 (data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"], data["usersData"][f"{message.chat.id}"]["sity"]))
@@ -1925,10 +1995,10 @@ def send_vibor_school(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Другая", callback_data=f"fourth_register_step_else")
     markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери школу',reply_markup=markup)
+    bot.send_message(chat_id=message.chat.id, text='Выбери школу',reply_markup=markup)
 
 def else_school(message):
-    conn = sql.connect('db.sql')
+    conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT school FROM schools')
     schols = cur.fetchall()
@@ -1948,6 +2018,7 @@ def else_school(message):
 
 print("бот запущен...")
 delOldDz()
+#delTempSchools()
 bot.send_message(config.ADMIN_ID, "Бот запущен")
 bot.polling(none_stop=True)
 bot.send_message(config.ADMIN_ID, "Бот выключается")

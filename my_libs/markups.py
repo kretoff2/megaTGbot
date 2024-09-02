@@ -9,6 +9,7 @@ my_markup.add(btn)
 btn = types.KeyboardButton("Школа 🏫")
 my_markup.add(btn)
 btn = types.KeyboardButton("Школа kretoffer'a 💻")
+btn = types.KeyboardButton("Магазин 🛍️")
 my_markup.add(btn)
 
 settings_markup = types.InlineKeyboardMarkup()
