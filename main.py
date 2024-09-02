@@ -78,7 +78,14 @@ def main(message):
     if message.chat.id != config.ADMIN_ID:
         bot.send_message(message.chat.id, "Недостаточнго прав")
     delOldDz(message)
-
+def delTempSchools():
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute('DELETE FROM schools WHERE school = null')
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("Временные школы удалены")
 def delOldDz(message=None):
     folder_name = "sqls"
     folder = Path(folder_name)
@@ -1573,6 +1580,7 @@ def rem_dz_step_2(message, schoolID, school_class, date, subject):
     bot.send_message(message.chat.id, "Дз успешно удалено")
     see_dz(message, schoolID, school_class, 0)
 def create_new_scholl_db(schoolID):
+    bot.send_message(config.ADMIN_ID, f"Создана новая школа с ID: {schoolID}")
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
     cur.execute('CREATE TABLE IF NOT EXISTS rasp (id int auto_increment primary key, class varchar(6), day int, lesson1 varchar(25), lesson2 varchar(25), lesson3 varchar(25), lesson4 varchar(25), lesson5 varchar(25), lesson6 varchar(25), lesson7 varchar(25), lesson8 varchar(25), lesson9 varchar(25), lesson10 varchar(25))')
@@ -1931,12 +1939,6 @@ def send_vibor_obl(call):
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text='Выбери область',reply_markup=markup)
 
 def else_obl(message):
-    conn = sql.connect('db.sql')
-    cur = conn.cursor()
-    cur.execute('INSERT INTO schools (contry, obl) VALUES ("%s", "%s")' % (data["usersData"][f"{message.chat.id}"]["contry"], message.text))
-    conn.commit()
-    cur.close()
-    conn.close()
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["obl"] = message.text
@@ -1965,12 +1967,6 @@ def send_vibor_sity(message):
     bot.send_message(chat_id=message.chat.id, text='Выбери город',reply_markup=markup)
 
 def else_sity(message):
-    conn = sql.connect('db.sql')
-    cur = conn.cursor()
-    cur.execute('INSERT INTO schools (contry, obl, sity) VALUES ("%s", "%s", "%s")' % (data["usersData"][f"{message.chat.id}"]["contry"],data["usersData"][f"{message.chat.id}"]["obl"],  message.text))
-    conn.commit()
-    cur.close()
-    conn.close()
     bot.delete_message(message.chat.id, message.message_id)
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["sity"] = message.text
@@ -2020,6 +2016,7 @@ def else_school(message):
 
 print("бот запущен...")
 delOldDz()
+#delTempSchools()
 bot.send_message(config.ADMIN_ID, "Бот запущен")
 bot.polling(none_stop=True)
 bot.send_message(config.ADMIN_ID, "Бот выключается")
