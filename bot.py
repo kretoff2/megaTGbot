@@ -95,7 +95,6 @@ def delOldDz(message=None):
     yesterday = datetime.today().date()
     yesterdaySPL = str(yesterday).split('-')
     for i in range(0, col):
-        i += 1
         conn = sql.connect(f'./sqls/{i}.sql')
         cur = conn.cursor()
         j = 0
@@ -114,6 +113,7 @@ def delOldDz(message=None):
         conn.commit()
         cur.close()
         conn.close()
+        i += 1
     if message != None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
     else: print("Старое дз за последние 10 дней удалено")
 
@@ -1642,7 +1642,7 @@ def report(call):
     bot.register_next_step_handler(call.message, report_send)
 def report_send(message):
     if message.text.lower() == "отмена":
-        bot.send_message(message.chat.id, "Репорт не отправлен")
+        bot.send_message(message.chat.id, "Репорт не отправлен", reply_markup=my_markup())
         return
     conn = sql_conn()
     cur = conn.cursor()
