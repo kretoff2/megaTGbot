@@ -134,7 +134,7 @@ def allMesage(message):
 
   for el in users:
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'go'])
 def main(message):
     if str(message.chat.id) not in data["usersData"]:
         data["usersData"][str(message.chat.id)] = {}
@@ -1282,7 +1282,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
                 "Русская лит.", "Белорусская лит.", "Человек и мир", "Всемирная истроия",
                 "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
                 "Химия", "Обществоведение", "Допризыв. под.", "Мед. подготовка", "Черчение",
-                "Астрономия"}
+                "Астрономия", "Физ.культ./ЧЗС"}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
@@ -1684,20 +1684,25 @@ def callback(call):
     callRazd = call.data.split(':')
     if callRazd[0] == "first_register_step":
         data["usersData"][str(call.message.chat.id)]["contry"] = callRazd[1]
+        save_data()
         send_vibor_obl(call)
     elif callRazd[0] == "second_register_step":
         data["usersData"][str(call.message.chat.id)]["obl"] = callRazd[1]
+        save_data()
         send_vibor_sity(call.message)
     elif callRazd[0] == "second_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        bot.delete_message(call.message.chat.id, call.message.message_id)
         tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_obl)
     elif callRazd[0] == "serd_register_step":
         data["usersData"][str(call.message.chat.id)]["sity"] = callRazd[1]
+        save_data()
         send_vibor_school(call.message)
     elif callRazd[0] == "serd_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        bot.delete_message(call.message.chat.id, call.message.message_id)
         tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_sity)
     elif callRazd[0] == "fourth_register_step":
         conn = sql.connect('db.sql')
@@ -1713,8 +1718,9 @@ def callback(call):
         bot.send_message(call.message.chat.id, "Вы успешно зарегистрированы")
         Go_start(call.message)
     elif callRazd[0] == "fourth_register_step_else":
-        tempData["usersData"][str(call.message.chat.id)]["botMessageID"] = call.message
+        bot.delete_message(call.message.chat.id, call.message.message_id)
         tempData["usersData"][str(call.message.chat.id)]["MessageID"] = bot.send_message(call.message.chat.id, "Введите название").message_id
+        save_data()
         bot.register_next_step_handler(call.message, else_school)
     elif callRazd[0] == "school_info":
         conn = sql.connect('db.sql')
@@ -1935,7 +1941,7 @@ def else_obl(message):
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["obl"] = message.text
     save_data()
-    send_vibor_sity(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
+    send_vibor_sity(message)
 
 def send_vibor_sity(message):
     markup = types.InlineKeyboardMarkup()
@@ -1956,7 +1962,7 @@ def send_vibor_sity(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Друой", callback_data=f"serd_register_step_else")
     markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери город',reply_markup=markup)
+    bot.send_message(chat_id=message.chat.id, text='Выбери город',reply_markup=markup)
 
 def else_sity(message):
     conn = sql.connect('db.sql')
@@ -1969,7 +1975,7 @@ def else_sity(message):
     bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["sity"] = message.text
     save_data()
-    send_vibor_school(tempData["usersData"][f"{message.chat.id}"]["botMessageID"])
+    send_vibor_school(message)
 
 def send_vibor_school(message):
     markup = types.InlineKeyboardMarkup()
@@ -1991,7 +1997,7 @@ def send_vibor_school(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Другая", callback_data=f"fourth_register_step_else")
     markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text='Выбери школу',reply_markup=markup)
+    bot.send_message(chat_id=message.chat.id, text='Выбери школу',reply_markup=markup)
 
 def else_school(message):
     conn = sql.connect('db.sql')
