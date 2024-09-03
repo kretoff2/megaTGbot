@@ -288,6 +288,8 @@ def gdz_s_8(call):
         bot.register_next_step_handler(message, gdz_geom_8)
     elif subject == "Алгебра":
         markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Повторение 7 класса", callback_data="gdz_alg_8:10")
+        markup.add(btn)
         btn = types.InlineKeyboardButton("Глава 1", callback_data="gdz_alg_8:0")
         markup.add(btn)
         btn = types.InlineKeyboardButton("Глава 2", callback_data="gdz_alg_8:2")
