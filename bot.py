@@ -189,7 +189,27 @@ def main(message):
         bot.send_message(message.chat.id,"Выбери страну", reply_markup=markup)
     else:
         Go_start(message)
+    if message.chat.id == config.ADMIN_ID:
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("SQL", callback_data="adminSQL")
+        markup.add(btn)
+        bot.send_message(message.chat.id, "Функции админа", reply_markup=markup)
 
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adminSQL"))
+def adminSQL(call):
+    bot.send_message(call.message.chat.id, "Введите SQL запрос")
+    bot.register_next_step_handler(call.message, adminSQL_go)
+def adminSQL_go(message):
+    try:
+        conn = sql_conn()
+        cur = conn.cursor()
+        cur.execute(message.text)
+        t = cur.fetchall()
+        cur.close()
+        conn.close()
+        bot.send_message(message.chat.id, f"Запрос выполнен\n\n{t}")
+    except Exception as _ex:
+        bot.send_message(message.chat.id, f"Произошла ошибка {_ex}")
 def openShop(message):
     conn = sql_conn()
     cur = conn.cursor()
