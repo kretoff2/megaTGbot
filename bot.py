@@ -143,6 +143,13 @@ def allMesage(message):
 
   for el in users:
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
+@bot.message_handler(commands=['help', 'помощь'])
+def main(message):
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    btn = types.KeyboardButton("/start")
+    markup.add(btn)
+    info = "Чтобы начать пользоваться ботом пропишите /start, если вы пользуетесь ботом впервые, то вам нужно зарегестрироваться /start"
+    bot.send_message(message.chat.id, info, reply_markup=markup)
 @bot.message_handler(commands=['start', 'go'])
 def main(message):
     if str(message.chat.id) not in data["usersData"]:
@@ -170,8 +177,7 @@ def main(message):
         if refer_id != "" and refer_id != str(message.chat.id):
             data["usersData"][str(message.chat.id)]["inviter"] = int(refer_id)
             data["usersData"][str(refer_id)]["invitedCol"] += 1
-            data["usersData"][str(message.chat.id)]["invited"][
-                str(data["usersData"][str(refer_id)]["invitedCol"])] = message.chat.id
+            data["usersData"][str(refer_id)]["invited"][str(message.chat.id)] = 10
             save_data()
             cur.execute("UPDATE users SET diamonds = diamonds+10 WHERE chatID = ? OR chatID = ?",
                         (refer_id, message.chat.id))
@@ -180,7 +186,13 @@ def main(message):
         cur.close()
         conn.close()
     elif user[6] == 0:
-        bot.send_message(message.chat.id, "Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.")
+        conn = sql_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT count(*) FROM users WHERE autorizationStep != 0")
+        col = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        bot.send_message(message.chat.id, f"Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.\n\nУже зарегестрировались {col}")
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -1673,10 +1685,17 @@ def main(message):
     elif message.text == "Магазин 🛍️":
         openShop(message)
     else:
+        markup = types.InlineKeyboardMarkup()
+        btn = types.InlineKeyboardButton("Подписаться", url="https://t.me/kretoffer_school_chanel")
+        markup.add(btn)
         if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил"]:
             bot.send_message(message.chat.id, f"Сам {message.text.lower()}! 😤")
+            if bot.get_chat_member(config.CHANEL_ID, message.chat.id).status not in ["member", "administrator", "creator"]:
+                bot.send_message(message.chat.id, "Вы еще не подписаны на наш канал, там вы можете найти что-то интересное", reply_markup=markup)
             return
         bot.send_message(message.chat.id, "Я вас не понимаю")
+        if bot.get_chat_member(config.CHANEL_ID, message.chat.id).status not in ["member", "administrator", "creator"]:
+            bot.send_message(message.chat.id, "Вы еще не подписаны на наш канал, там вы можете найти что-то интересное",reply_markup=markup)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith("report_btn"))
 def report(call):
     conn = sql_conn()
