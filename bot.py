@@ -193,6 +193,8 @@ def main(message):
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("SQL", callback_data="adminSQL")
         markup.add(btn)
+        btn = types.InlineKeyboardButton("Terminal", callback_data="adminTerminal")
+        markup.add(btn)
         bot.send_message(message.chat.id, "Функции админа", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith("adminSQL"))
@@ -200,16 +202,46 @@ def adminSQL(call):
     bot.send_message(call.message.chat.id, "Введите SQL запрос")
     bot.register_next_step_handler(call.message, adminSQL_go)
 def adminSQL_go(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("SQL", callback_data="adminSQL")
+    markup.add(btn)
     try:
         conn = sql_conn()
         cur = conn.cursor()
         cur.execute(message.text)
+        conn.commit()
         t = cur.fetchall()
         cur.close()
         conn.close()
-        bot.send_message(message.chat.id, f"Запрос выполнен\n\n{t}")
+        info = ""
+        for el in t:
+            info += f"\n{el}\n"
+        bot.send_message(message.chat.id, f"Запрос выполнен\n\n{info}", reply_markup=markup)
     except Exception as _ex:
-        bot.send_message(message.chat.id, f"Произошла ошибка {_ex}")
+        bot.send_message(message.chat.id, f"Произошла ошибка {_ex}", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adminTerminal"))
+def adminTerminal(call):
+    bot.send_message(call.message.chat.id, "Введите python запрос")
+    bot.register_next_step_handler(call.message, adminTerminal_go)
+def adminTerminal_go(message):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Terminal", callback_data="adminTerminal")
+    markup.add(btn)
+    global print
+    oldPrint = print
+    info = ""
+    def pr(message):
+        nonlocal info
+        oldPrint(message)
+        info += message + "\n\n"
+    try:
+        print = pr
+        exec(message.text)
+        print = oldPrint
+        bot.send_message(message.chat.id, f"Команда выполнена\n\n{info}", reply_markup=markup)
+    except Exception as _ex:
+        bot.send_message(message.chat.id, f"Произошла ошибка {_ex}", reply_markup=markup)
 def openShop(message):
     conn = sql_conn()
     cur = conn.cursor()
@@ -1313,7 +1345,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
                 "Русская лит.", "Белорусская лит.", "Человек и мир", "Всемирная истроия",
                 "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
                 "Химия", "Обществоведение", "Допризыв. под.", "Мед. подготовка", "Черчение",
-                "Астрономия", "Физ.культ./ЧЗС"}
+                "Астрономия", "Физ.культ./ЧЗС", "Труды"}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
