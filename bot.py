@@ -143,6 +143,25 @@ def allMesage(message):
 
   for el in users:
     bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
+@bot.message_handler(commands=['friends', 'друзья'])
+def main(message):
+    conn = sql_conn()
+    cur = conn.cursor()
+    info = ""
+    if data["usersData"][str(message.chat.id)]["inviter"] != None:
+        cur.execute("SELECT first_name, last_name FROM users WHERE chatID = ?", (data["usersData"][str(message.chat.id)]["inviter"],))
+        inviter = cur.fetchone()
+        info += f"Вас пригалисл {inviter[0]} "
+        if inviter[1] != None and inviter[1] != "None": info += inviter[1]
+    info += "\n\n Ваш друг — заработано с них алмазов\n\n"
+    info += "Друзья:\n\n"
+    for el in data["usersData"][str(message.chat.id)]["invited"]:
+        cur.execute("SELECT first_name, last_name FROM users WHERE chatID = ?", (int(el),))
+        friend = cur.fetchone()
+        info += f"{friend[0]} "
+        if friend[1] != None and friend[1] != "None": info += friend[1]
+        info += f" — {data['usersData'][str(message.chat.id)]['invited'][el]}\n"
+    bot.send_message(message.chat.id, info)
 @bot.message_handler(commands=['help', 'помощь'])
 def main(message):
     markup = types.ReplyKeyboardMarkup(row_width=1)
