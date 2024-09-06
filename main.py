@@ -19,6 +19,24 @@ def start_bot():
         bot.bot.send_message(config.ADMIN_ID, f"Произошла ошибка {_ex}")
     finally:
         start_bot()
+def start_miniApp():
+    try:
+        miniApp.run_miniApp()
+    except Exception as _ex:
+        print("error miniApp")
+        offset = datetime.timezone(datetime.timedelta(hours=3))
+        now = datetime.datetime.now(offset)
+        with open(f"logs/clicker/{now.date()}.txt", "a") as file:
+            print(_ex)
+            tb = traceback.format_exc()
+            file.write(f"[{now.time()}]\t{str(_ex)}\n\n{tb}\n\n")
+        bot.bot.send_message(config.ADMIN_ID, f"Произошла ошибка {_ex}")
+    finally:
+        start_miniApp()
 
 bot_thread = threading.Thread(target=start_bot)
 bot_thread.start()
+#miniApp_thread = threading.Thread(target=start_miniApp)
+#miniApp_thread.start()
+
+import miniApp
