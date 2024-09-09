@@ -34,8 +34,8 @@ async def edit_clicks(chatID, col=1, znac="+", energy = 1):
     cur.close()
     conn.close()
 def check_for_auto_clicker(clicks, old_clicks):
-    if abs(clicks[1]-clicks[0]) <= 0.08 or abs(round(clicks[1] - clicks[0], 3)) == abs(round(old_clicks[1] - old_clicks[0], 3)):
-        return True
+    #if abs(clicks[1]-clicks[0]) <= 0.08 or abs(round(clicks[1] - clicks[0], 3)) == abs(round(old_clicks[1] - old_clicks[0], 3)):
+    #   return True
     return False
 async def main(page: ft.Page):
     page.title = "kretoffer clicker"
@@ -43,6 +43,7 @@ async def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.fonts = {"standart": "fonts/standart.otf"}
     page.theme = ft.Theme(font_family="standart")
+    page.bgcolor = "#000000"
     query_params = parse_qs(urlparse(page.route).query)
     chatID = int(query_params.get("userID", [0])[0])
     last_clicks = [0, 3]
@@ -76,7 +77,6 @@ async def main(page: ft.Page):
             cur = conn.cursor()
             cur.execute('SELECT lastSeen FROM clicker WHERE chatID = ?', (chatID,))
             lastSeen = cur.fetchone()[0]
-            print(int(datetime.now().timestamp()) - lastSeen)
             if int(datetime.now().timestamp()) - lastSeen >= 5:
                 while int(datetime.now().timestamp()) - lastSeen >= 5:
                     cur.execute('UPDATE clicker SET energy = energy + 1 WHERE chatID = ?', (chatID,))
@@ -116,11 +116,49 @@ async def main(page: ft.Page):
         conn.commit()
     cur.close()
     conn.close()
+    async def open_dilog(e):
+        page.dialog = clicks_to_coins_dilog
+        clicks_to_coins_dilog.open = True
+        page.update()
+    async def clicks_to_coins(e):
+        if score.data >= 10:
+            conn = sql_conn()
+            cur = conn.cursor()
+            cur.execute("UPDATE clicker SET clicks = 0 WHERE chatID = ?", (chatID,))
+            cur.execute("UPDATE users SET coins = coins + ? WHERE chatID = ?", (int(score.data/10), chatID))
+            conn.commit()
+            cur.close()
+            conn.close()
+            score.data = 0
+            score.value = "0"
+            page.dialog.title = ft.Text("Все супер")
+            page.dialog.content = ft.Text("Клики успешно выведены")
+            page.dialog.actions = [ft.TextButton("Выйти", on_click=close_dilog)]
+            page.update()
+        else:
+            page.dialog.title = ft.Text("Мало натапал")
+            page.dialog.content = ft.Text("У вас недостаточно кликов, тапайте дальше")
+            page.dialog.actions = [ft.TextButton("Выйти", on_click=close_dilog)]
+            page.update()
+    async def close_dilog(e):
+        clicks_to_coins_dilog.open = False
+        page.update()
 
     score = ft.Text(value=str(clicks), data=clicks, size=100)
     score_counter = ft.Text(size=50, animate_opacity=ft.Animation(duration=600, curve=ft.AnimationCurve.BOUNCE_IN))
 
-    button = ft.Container(bgcolor="#030059", border=ft.border.all(30, "#010025"), border_radius=250, width=page.width*0.8, height=page.width*0.8, animate_scale=ft.Animation(duration=600, curve=ft.AnimationCurve.EASE), margin=ft.margin.only(bottom=50), on_click=click, content=ft.Text("Типа хомяк", size=45), alignment=ft.alignment.center)
+    button = ft.Container(bgcolor="#030059", border=ft.border.all(30, "#010025"), border_radius=250, width=page.width*0.8, height=page.width*0.8, animate_scale=ft.Animation(duration=600, curve=ft.AnimationCurve.EASE), margin=ft.margin.only(bottom=50), on_click=click, content=ft.Text("Типа хомяк", size=35), alignment=ft.alignment.center)
+
+    clicks_to_coins_btn=ft.Container(bgcolor="#141414", border_radius=15, alignment=ft.alignment.center, content=ft.Text("Клики в монеты", size=30), height=120, width=page.width, margin=ft.margin.symmetric(vertical=10), on_click=open_dilog)
+
+    clicks_to_coins_dilog = ft.AlertDialog(
+        modal=True, title=ft.Text("Вы уверены"),
+        content=ft.Text("Если вы уверены, то все ваши клики исчезнут, а в @kretoffer_school_bot появятся монеты. Нынешний курс 10 кликов = 1 монета"),
+        actions=[
+            ft.TextButton("Вывести", on_click=clicks_to_coins),
+            ft.TextButton("Отмена", on_click=close_dilog)
+        ],actions_alignment=ft.MainAxisAlignment.END
+    )
 
     progress_bar = ft.ProgressBar(value=user[2] / user[3], width=page.width*0.95, bar_height=20, color="#d17c0d", bgcolor="#844e08", data=user[2])
     progress_bar_container = ft.Container(progress_bar, alignment=ft.alignment.center, border_radius=30)
@@ -130,7 +168,8 @@ async def main(page: ft.Page):
             button,
             score_counter
         ], alignment=ft.MainAxisAlignment.CENTER)], alignment=ft.MainAxisAlignment.CENTER),
-        ft.Row([progress_bar_container], alignment=ft.MainAxisAlignment.CENTER)
+        ft.Row([progress_bar_container], alignment=ft.MainAxisAlignment.CENTER),
+        clicks_to_coins_btn
     ]), alignment=ft.alignment.center)
 
 
