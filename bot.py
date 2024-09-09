@@ -130,8 +130,8 @@ def clicker(message):
     conn.close()
     markup = types.InlineKeyboardMarkup(row_width=1)
     photos = bot.get_user_profile_photos(message.chat.id)
-    a = f"http://{config.ADRES}?userID={message.chat.id}"
-    a = "https://open.spotify.com"
+    a = f"http://{config.ADRES}/?userID={message.chat.id}"
+    #a = "https://open.spotify.com"
     if photos.total_count > 0:
         photo = photos.photos[0][-1]
         file_info = bot.get_file(photo.file_id)
@@ -140,7 +140,7 @@ def clicker(message):
         image = image.resize((128, 128), Image.Resampling.LANCZOS)
         image.save(f"./data/imgs/{message.chat.id}.jpg")
     web_app_info = types.WebAppInfo(a)
-    web_app = types.InlineKeyboardButton(text="Тапать", web_app=web_app_info)
+    web_app = types.InlineKeyboardButton(text="Тапать", url=a)
     markup.add(web_app)
     bot.send_message(message.chat.id, "Привет! Добро пожаловать в кликер. Касайтесь экрана, собирайте монеты, увеличивайте свой пассивный доход, разработать собственную стратегию получения дохода. Коины полученые в кликере можно будет использовать в @kretoffer_school_bot. Не забывайте о своих друзьях — приводите их в игру и вместе зарабатывайте еще больше монет!", reply_markup=markup)
 @bot.message_handler(commands=['allMessage'])
@@ -1398,11 +1398,7 @@ def add_rasp_list(message, schoolID, school_class):
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="На какой день недели вы хотите ввести рассписание", reply_markup=markup)
 def add_dz(message, schoolID, school_class, day = None, number = None, subject = None):
-    subjects = {"Русский язык", "Белорусский язык", "Иностранный язык", "Математика", "Алгебра", "Геометрия",
-                "Русская лит.", "Белорусская лит.", "Человек и мир", "Всемирная истроия",
-                "История Беларуси", "История России", "Искусство", "Биология", "География", "Информатика", "Физика",
-                "Химия", "Обществоведение", "Допризыв. под.", "Мед. подготовка", "Черчение",
-                "Астрономия", "Физ.культ./ЧЗС", "Труды"}
+    subjects = {'Алгебра', 'Астрономия', 'Белорусская лит.', 'Белорусский язык', 'Биология', 'Всемирная истроия', 'География', 'Геометрия', 'Допризыв. под.', 'Иностранный язык', 'Информатика', 'Искусство', 'История Беларуси', 'История России', 'Математика', 'Мед. подготовка', 'Обществоведение', 'Русская лит.', 'Русский язык', 'Труды', 'Физ.культ./ЧЗС', 'Физика', 'Химия', 'Человек и мир', 'Черчение', 'Гультрест'}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
@@ -1414,6 +1410,8 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
         return
     conn = sql.connect(f"./sqls/{schoolID}.sql")
     cur = conn.cursor()
+    if int(number) == 1:
+        cur.execute('DELETE FROM rasp WHERE class = ? AND day = ?', (school_class, day))
     cur.execute('SELECT * FROM rasp WHERE class = ? AND day = ?', (school_class, day))
     temp = cur.fetchone()
     if temp == None:
@@ -1561,8 +1559,10 @@ def reply_for_homeTask_ask(call):
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,text=f"Впиши дз по {subject} на {Odate}", reply_markup=markup)
-    bot.register_next_step_handler(message, add_homeTask_step_3)
-    bot.send_message(message.chat.id, "Дз которое вы просили добавлено")
+    bot.register_next_step_handler(message, reply_for_homeTask_handler, id)
+def reply_for_homeTask_handler(message, id):
+    add_homeTask_step_3(message)
+    bot.send_message(id, "Дз которое вы просили добавлено")
 def add_homeTask(message, schoolID, school_class):
     today = datetime.today().date()
     todaySPL = str(today).split('-')

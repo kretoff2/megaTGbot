@@ -23,14 +23,18 @@ async def edit_clicks(chatID, col=1, znac="+", energy = 1):
     clicks = int(cur.fetchone()[0])
     if znac == "+": clicks+=col
     elif znac == "-": clicks-= col
+    cur.execute('SELECT lastSeen FROM clicker WHERE chatID = ?', (chatID,))
+    lastSeen = cur.fetchone()[0]
+    if int(datetime.now().timestamp()) - lastSeen >=5:
+        cur.execute('UPDATE clicker SET energy = energy + 1 WHERE chatID = ?', (chatID,))
+        cur.execute('UPDATE clicker SET lastSeen = ? WHERE chatID=?', (datetime.now().timestamp(), chatID))
     cur.execute('UPDATE clicker SET clicks = ? WHERE chatID=?', (str(clicks), chatID))
-    cur.execute('UPDATE clicker SET lastSeen = ? WHERE chatID=?', (datetime.now().timestamp(), chatID))
     cur.execute('UPDATE clicker SET energy = energy - ? WHERE chatID=?', (energy, chatID))
     conn.commit()
     cur.close()
     conn.close()
 def check_for_auto_clicker(clicks, old_clicks):
-    if abs(clicks[1]-clicks[0]) <= 0.09 or abs(round(clicks[1] - clicks[0], 3)) == abs(round(old_clicks[1] - old_clicks[0], 3)):
+    if abs(clicks[1]-clicks[0]) <= 0.08 or abs(round(clicks[1] - clicks[0], 3)) == abs(round(old_clicks[1] - old_clicks[0], 3)):
         return True
     return False
 async def main(page: ft.Page):
@@ -40,7 +44,7 @@ async def main(page: ft.Page):
     page.fonts = {"standart": "fonts/standart.otf"}
     page.theme = ft.Theme(font_family="standart")
     query_params = parse_qs(urlparse(page.route).query)
-    chatID = int(query_params.get("chatID", [0])[0])
+    chatID = int(query_params.get("userID", [0])[0])
     last_clicks = [0, 3]
     old_last_clicks = [0, 8]
     clicksStep = 0
@@ -68,6 +72,21 @@ async def main(page: ft.Page):
             return
         old_last_clicks = last_clicks.copy()
         if progress_bar.data <= 0:
+            conn = sql_conn()
+            cur = conn.cursor()
+            cur.execute('SELECT lastSeen FROM clicker WHERE chatID = ?', (chatID,))
+            lastSeen = cur.fetchone()[0]
+            print(int(datetime.now().timestamp()) - lastSeen)
+            if int(datetime.now().timestamp()) - lastSeen >= 5:
+                while int(datetime.now().timestamp()) - lastSeen >= 5:
+                    cur.execute('UPDATE clicker SET energy = energy + 1 WHERE chatID = ?', (chatID,))
+                    progress_bar.data += 1
+                    cur.execute('UPDATE clicker SET lastSeen = ? WHERE chatID=?', (datetime.now().timestamp(), chatID))
+                    conn.commit()
+                    lastSeen+=5
+                cur.close()
+                conn.close()
+                return
             page.snack_bar = ft.SnackBar(content=ft.Text("У вас нет энергии", size=30, text_align=ft.TextAlign.CENTER, color="#FFFFFF"), bgcolor="#25223A")
             page.snack_bar.open = True
             page.update()
@@ -87,10 +106,17 @@ async def main(page: ft.Page):
     cur = conn.cursor()
     cur.execute('SELECT * FROM clicker WHERE chatID = ?', (chatID,))
     user = cur.fetchone()
+    user = list(user)
     if user is not None: clicks = int(user[1])
     else: pass
+    if user[2] != user[3]:
+        user[2]+=(int(datetime.now().timestamp())-user[7])/5
+        if user[2] > user[3]: user[2] = user[3]
+        cur.execute('UPDATE clicker SET energy = ? WHERE chatID = ?', (user[2], chatID))
+        conn.commit()
     cur.close()
     conn.close()
+
     score = ft.Text(value=str(clicks), data=clicks, size=100)
     score_counter = ft.Text(size=50, animate_opacity=ft.Animation(duration=600, curve=ft.AnimationCurve.BOUNCE_IN))
 
