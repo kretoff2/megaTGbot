@@ -27,7 +27,7 @@ def sql_conn():
 
 conn = sql_conn()
 cur = conn.cursor()
-cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class varchar(6))')
+cur.execute('CREATE TABLE IF NOT EXISTS users (id int auto_increment primary key, first_name varchar(50), last_name varchar(50), chatID int, bagsTimeOut float, schoolID int, autorizationStep int, teacher bit, experience int, level int, coins int, diamonds int, tickets int, class varchar(6), rating int)')
 cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary key, schoolID int, contry varchar(20), obl varchar(50), sity varchar(50), school varchar(50), rating int)')
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
@@ -51,6 +51,9 @@ data = {
 
     },
     "education":{
+
+    },
+    "schoolsData":{
 
     }
 }
@@ -214,8 +217,8 @@ def main(message):
         conn = sql_conn()
         cur = conn.cursor()
         cur.execute(
-            'INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (
-            message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0))
+            'INSERT INTO users (first_name, last_name, chatID, bagsTimeOut, autorizationStep, experience, level, coins, diamonds, tickets, rating) VALUES ("%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s")' % (
+            message.from_user.first_name, message.from_user.last_name, message.chat.id, 0, 0, 0, 0, 0, 0, 0, 0))
         tempData['usersData'][str(message.chat.id)] = {}
         start_command = message.text
         refer_id = str(start_command[7:])
@@ -393,7 +396,7 @@ def gdz_s_8(call):
         bot.send_message(message.chat.id, "Введите номер параграфа")
         bot.register_next_step_handler(message, gdz_geo_8)
     elif subject == "Геометрия":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
+        bot.send_message(message.chat.id, "Введите номер задания")
         bot.register_next_step_handler(message, gdz_geom_8)
     elif subject == "Алгебра":
         markup = types.InlineKeyboardMarkup()
@@ -606,7 +609,7 @@ def gdz_s_7(call):
         bot.send_message(message.chat.id, "Введите номер упражнения")
         bot.register_next_step_handler(message, gdz_bel_7)
     elif subject == "Геометрия":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
+        bot.send_message(message.chat.id, "Введите номер задания")
         bot.register_next_step_handler(message, gdz_geom_7)
     elif subject == "Алгебра":
         markup = types.InlineKeyboardMarkup()
@@ -1242,7 +1245,7 @@ def my_room(message):
     btn = types.InlineKeyboardButton("Изменить фамилию", callback_data=f"new_last_name:{message.chat.id}")
     markup.add(btn)
     tempData["usersData"][str(message.chat.id)]["tempMessage"] = message
-    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
+    infoText = f"ID: {info[3]}\n\nИмя: {info[1]}\nФамилия: {info[2]}\n\nКласс: {info[13]}\n\nОпыт: {info[8]}\nУровень: {info[9]}\nМонеты: {info[10]}\nАлмазы: {info[11]}\nБилеты: {info[12]}\n\nРейтинг: {info[14]}\n\nПриглашено друзей: {data['usersData'][str(message.chat.id)]['invitedCol']}"
     bot.send_message(message.chat.id, infoText, reply_markup=markup)
 
 @bot.message_handler(commands=['op'])
@@ -1398,10 +1401,11 @@ def add_rasp_list(message, schoolID, school_class):
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="На какой день недели вы хотите ввести рассписание", reply_markup=markup)
 def add_dz(message, schoolID, school_class, day = None, number = None, subject = None):
-    subjects = {'Алгебра', 'Астрономия', 'Белорусская лит.', 'Белорусский язык', 'Биология', 'Всемирная истроия', 'География', 'Геометрия', 'Допризыв. под.', 'Иностранный язык', 'Информатика', 'Искусство', 'История Беларуси', 'История России', 'Математика', 'Мед. подготовка', 'Обществоведение', 'Русская лит.', 'Русский язык', 'Труды', 'Физ.культ./ЧЗС', 'Физика', 'Химия', 'Человек и мир', 'Черчение', 'Гультрест'}
+    subjects = {'Алгебра', 'Астрономия', 'Белорусская лит.', 'Белорусский язык', 'Биология', 'Всемирная истроия', 'География', 'Геометрия', 'Допризыв. под.', 'Иностранный язык', 'Информатика', 'Искусство', 'История Беларуси', 'История России', 'Математика', 'Мед. подготовка', 'Обществоведение', 'Русская лит.', 'Русский язык', 'Труды', 'Физ.культ./ЧЗС', 'Физика', 'Химия', 'Человек и мир', 'Черчение', 'Гультрест (ничего)'}
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
+    subjects = sorted(subjects)
     if subject == None:
         for el in subjects:
             btn = types.InlineKeyboardButton(el, callback_data=f"add_dz:{schoolID}:{school_class}:{day}:{number}:{el}")
@@ -1636,16 +1640,82 @@ def add_homeTask_step_3(message):
     cur.execute('SELECT class FROM users WHERE chatID = ?', (message.chat.id,))
     t = cur.fetchone()
     my_class = t[0]
-    cur.close()
-    conn.close()
-    conn = sql.connect(f'./sqls/{schoolID}.sql')
-    cur = conn.cursor()
-    cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (tempData["usersData"][str(message.chat.id)]["tempDate"], tempData["usersData"][str(message.chat.id)]["tempSubject"], message.text, my_class))
-    conn.commit()
+    cur.execute('SELECT chatID FROM users WHERE schoolID = ? AND class = ?', (schoolID, my_class))
+    students = cur.fetchall()
     cur.close()
     conn.close()
     bot.send_message(message.chat.id, "Дз добавлено")
     school_info(message)
+    add_dz_id = 0
+    if my_class not in data["schoolsData"][str(schoolID)]:
+        data["schoolsData"][str(schoolID)][my_class]={}
+    if "add_dz" not in data["schoolsData"][str(schoolID)][my_class]:
+        data["schoolsData"][str(schoolID)][my_class]["add_dz"] = {}
+    if data["schoolsData"][str(schoolID)][my_class]["add_dz"] == {}:
+        add_dz_id = 0
+    else:
+        add_dz_id = int(max(data["schoolsData"][str(schoolID)][my_class]["add_dz"])) + 1
+    data["schoolsData"][str(schoolID)][my_class]["add_dz"][str(add_dz_id)] = {
+        "date": tempData["usersData"][str(message.chat.id)]["tempDate"],
+        "subject": tempData["usersData"][str(message.chat.id)]["tempSubject"],
+        "dz": message.text,
+        "writer": message.chat.id,
+        "rating": 1,
+        "answers":[message.chat.id]
+    }
+    save_data()
+    markup = types.InlineKeyboardMarkup()
+    btn0 = types.InlineKeyboardButton("Да", callback_data=f"add_dz_rait:good:{schoolID}:{my_class}:{add_dz_id}")
+    btn1 = types.InlineKeyboardButton("Нет", callback_data=f"add_dz_rait:bad:{schoolID}:{my_class}:{add_dz_id}")
+    markup.add(btn0, btn1)
+    for el in students:
+        el = el[0]
+        if el != message.chat.id:
+            bot.send_message(el, f'Правильное ли это дз по {tempData["usersData"][str(message.chat.id)]["tempSubject"]} на {tempData["usersData"][str(message.chat.id)]["tempDate"]}:\n\n{message.text}', reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('add_dz_rait:'))
+def add_homeTask_step_3_rait(call):
+    message, status, schoolID, my_class, add_dz_id = call.data.split(":")
+    message = call.message
+    if add_dz_id not in data["schoolsData"][schoolID][my_class]["add_dz"]:
+        bot.send_message(message.chat.id, "Это дз уже добавлено или удалено")
+        bot.delete_message(message.chat.id, message.message_id)
+        return
+    if message.chat.id in data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["answers"]:
+        bot.send_message(message.chat.id, "Вы уже ответили")
+    data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["answers"].append(message.chat.id)
+    bot.send_message(message.chat.id, "Спасибо")
+    bot.delete_message(message.chat.id, message.message_id)
+    if status == "good": data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["rating"] += 1
+    elif status == "bad": data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["rating"] -= 1
+    if data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["rating"] not in range(0, 3): add_homeTask_step_4(schoolID, my_class, add_dz_id)
+def add_homeTask_step_4(schoolID, my_class, add_dz_id):
+    if data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["rating"] < 0:
+        conn = sql_conn()
+        cur = conn.cursor()
+        cur.execute('UPDATE users SET rating = rating - 2 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
+        conn.commit()
+        cur.close()
+        conn.close()
+        bot.send_message(data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"], f'Добавленное вами дз по предмету {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"]} на {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"]} помечено как неправильное, за это у вас снимают 2 очка рейтинга')
+        del data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]
+        save_data()
+        return
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute('UPDATE users SET rating = rating + 1 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
+    conn.commit()
+    cur.close()
+    conn.close()
+    conn = sql.connect(f'./sqls/{schoolID}.sql')
+    cur = conn.cursor()
+    cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"], data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"], data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["dz"], my_class))
+    conn.commit()
+    cur.close()
+    conn.close()
+    bot.send_message(data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"], f'Добавленное вами дз по предмету {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"]} на {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"]} помечено как правильное, за это вам дают 1 очко рейтинга')
+    del data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]
+    save_data()
 def rem_homeTask(message, schoolID, school_class):
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
@@ -1702,6 +1772,8 @@ def create_new_scholl_db(schoolID):
     conn.commit()
     cur.close()
     conn.close()
+    data["schoolsData"][str(schoolID)] = {}
+    save_data()
 
 def kretoffSchool(message):
     markup = types.InlineKeyboardMarkup()
