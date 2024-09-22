@@ -1,5 +1,4 @@
 from datetime import datetime
-import time
 from urllib.parse import urlparse, parse_qs
 import config
 import flet as ft
@@ -108,10 +107,10 @@ async def main(page: ft.Page):
     user = cur.fetchone()
     user = list(user)
     if user is not None: clicks = int(user[1])
-    else: pass
     if user[2] != user[3]:
         user[2]+=(int(datetime.now().timestamp())-user[7])/5
-        if user[2] > user[3]: user[2] = user[3]
+        if user[2] > user[3]:
+            user[2] = user[3]
         cur.execute('UPDATE clicker SET energy = ? WHERE chatID = ?', (user[2], chatID))
         conn.commit()
     cur.close()

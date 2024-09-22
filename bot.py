@@ -119,7 +119,7 @@ def delOldDz(message=None):
         cur.close()
         conn.close()
         i += 1
-    if message != None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
+    if message is not None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
     else: print("Старое дз за последние 10 дней удалено")
 @bot.message_handler(commands=['clicker'])
 def clicker(message):
@@ -142,7 +142,7 @@ def clicker(message):
         image = Image.open(io.BytesIO(downloaded_file))
         image = image.resize((128, 128), Image.Resampling.LANCZOS)
         image.save(f"./data/imgs/{message.chat.id}.jpg")
-    web_app_info = types.WebAppInfo(a)
+    #web_app_info = types.WebAppInfo(a)
     web_app = types.InlineKeyboardButton(text="Тапать", url=a)
     markup.add(web_app)
     bot.send_message(message.chat.id, "Привет! Добро пожаловать в кликер. Касайтесь экрана, собирайте монеты, увеличивайте свой пассивный доход, разработать собственную стратегию получения дохода. Коины полученые в кликере можно будет использовать в @kretoffer_school_bot. Не забывайте о своих друзьях — приводите их в игру и вместе зарабатывайте еще больше монет!", reply_markup=markup)
@@ -177,18 +177,18 @@ def main(message):
     conn = sql_conn()
     cur = conn.cursor()
     info = ""
-    if data["usersData"][str(message.chat.id)]["inviter"] != None:
+    if data["usersData"][str(message.chat.id)]["inviter"] is not None:
         cur.execute("SELECT first_name, last_name FROM users WHERE chatID = ?", (data["usersData"][str(message.chat.id)]["inviter"],))
         inviter = cur.fetchone()
         info += f"Вас пригалисл {inviter[0]} "
-        if inviter[1] != None and inviter[1] != "None": info += inviter[1]
+        if inviter[1] is not None and inviter[1] != "None": info += inviter[1]
     info += "\n\n Ваш друг — заработано с них алмазов\n\n"
     info += "Друзья:\n\n"
     for el in data["usersData"][str(message.chat.id)]["invited"]:
         cur.execute("SELECT first_name, last_name FROM users WHERE chatID = ?", (int(el),))
         friend = cur.fetchone()
         info += f"{friend[0]} "
-        if friend[1] != None and friend[1] != "None": info += friend[1]
+        if friend[1] is not None and friend[1] != "None": info += friend[1]
         info += f" — {data['usersData'][str(message.chat.id)]['invited'][el]}\n"
     bot.send_message(message.chat.id, info)
 @bot.message_handler(commands=['help', 'помощь'])
@@ -343,7 +343,7 @@ def buy_diamonds(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Купить", callback_data=f"buy_diamonds:{col}:{price}")
     markup.add(btn)
-    btn = types.InlineKeyboardButton("Отмена", callback_data=f"cancel_buy")
+    btn = types.InlineKeyboardButton("Отмена", callback_data="cancel_buy")
     markup.add(btn)
     bot.send_message(call.message.chat.id, info, reply_markup=markup)
 
@@ -549,7 +549,7 @@ def gdz_angl_8(message, book, part = None):
         return
     try:
         URL = f'https://resheba.top/GDZ/{book}'
-        if part != None: URL+=f"/{part}"
+        if part is not None: URL+=f"/{part}"
         else: URL+="/str"
         URL+=f"/{nomer}.png"
         response = requests.get(URL)
@@ -733,7 +733,7 @@ def gdz_angl_8(message, book, part = None):
         return
     try:
         URL = f'https://resheba.top/GDZ/{book}'
-        if part != None: URL+=f"/{part}"
+        if part is not None: URL+=f"/{part}"
         else: URL+="/str"
         URL+=f"/{nomer}.png"
         response = requests.get(URL)
@@ -790,7 +790,9 @@ def go_education(message):
         data['education'][str(message.chat.id)]['complet_lessons'] = {}
         data['education'][str(message.chat.id)]['complet_tests'] = {}
         data['education'][str(message.chat.id)]['completed_courses'] = 0
+        data['education'][str(message.chat.id)]['completed_exams'] = {}
         data['education'][str(message.chat.id)]['GPA'] = 0
+        data['education'][str(message.chat.id)]['exams_GPA'] = 0
         data['education'][str(message.chat.id)]['problems_solved'] = 0
         data['education'][str(message.chat.id)]['decided_correctly'] = 0
         save_data()
@@ -816,7 +818,7 @@ def my_courses(message):
     btn = types.InlineKeyboardButton("Назад", callback_data="education")
     markup.add(btn)
     for el in data['education'][str(message.chat.id)]['my_courses']:
-        if data['education'][str(message.chat.id)]['my_courses'][el]['completed'] != True:
+        if not data['education'][str(message.chat.id)]['my_courses'][el]['completed']:
             btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
             markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
@@ -824,7 +826,7 @@ def completed_courses(message):
     markup = types.InlineKeyboardMarkup()
     info = "Пройденныйе курсы:\n"
     for el in data['education'][str(message.chat.id)]['my_courses']:
-        if data['education'][str(message.chat.id)]['my_courses'][el]["completed"] == True:
+        if data['education'][str(message.chat.id)]['my_courses'][el]["completed"]:
             i = lessonsData["courses"][str(el)]['name']
             btn = types.InlineKeyboardButton(i, callback_data=f"course:{el}")
             markup.add(btn)
@@ -873,10 +875,11 @@ def courses_subject_list(message, subject, userClass):
     btn = types.InlineKeyboardButton("Назад", callback_data="courses_list")
     markup.add(btn)
     for el in lessonsData['courses']:
-        if lessonsData["courses"][el]["subject"] == subject and lessonsData["courses"][el]["class"] == userClass:
-            if el not in data['education'][str(message.chat.id)]['my_courses'] or data['education'][str(message.chat.id)]['my_courses'][el]['completed'] != True:
-                btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
-                markup.add(btn)
+        if el != "_comment":
+            if lessonsData["courses"][el]["subject"] == subject and lessonsData["courses"][el]["class"] == userClass:
+                if el not in data['education'][str(message.chat.id)]['my_courses'] or not data['education'][str(message.chat.id)]['my_courses'][el]['completed']:
+                    btn = types.InlineKeyboardButton(lessonsData['courses'][el]['name'], callback_data=f"course:{el}")
+                    markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери курс",reply_markup=markup)
 def start_course(message, courseID):
     markup = types.InlineKeyboardMarkup()
@@ -887,7 +890,7 @@ def start_course(message, courseID):
     info = f"Курс {lessonsData['courses'][str(courseID)]['name']}:\n{lessonsData['courses'][str(courseID)]['subtitle']}\n\nКласс: {lessonsData['courses'][str(courseID)]['class']}\nУроков: {len(lessonsData['courses'][str(courseID)]['lessons'])}\n\nРекомендации к курсу: {lessonsData['courses'][str(courseID)]['recommendations']}\n"
     if str(courseID) in data['education'][str(message.chat.id)]['my_courses']:
         info += f"Пройдено уроков: {data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons']}"
-        if data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] == True:
+        if data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed']:
             btn = types.InlineKeyboardButton("Обнулить курс", callback_data=f"course_back:{courseID}")
             markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
@@ -899,7 +902,7 @@ def go_course_lesson(message, courseID):
     data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons']+=1
     i = data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons']
     if i >= len(lessonsData['courses'][str(courseID)]['lessons']):
-        if data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] != True:
+        if not data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed']:
             data['education'][str(message.chat.id)]['completed_courses']+=1
             data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] = True
         data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons'] = len(lessonsData['courses'][str(courseID)]['lessons'])
@@ -1115,10 +1118,10 @@ def start_lesson(message, lessonID, index):
             data['education'][str(message.chat.id)]['completed_lesson']+=1
             data['education'][str(message.chat.id)]['complet_lessons'][str(lessonID)]=1
         save_data()
-        if lessonsData["lessons"][lessonID]["test"] != None:
+        if lessonsData["lessons"][lessonID]["test"] is not None:
             btn = types.InlineKeyboardButton("Пройти тест", callback_data=f'test:{lessonsData["lessons"][lessonID]["test"]}:1:0:False')
             markup.add(btn)
-        if "videoLesson" in lessonsData["lessons"][lessonID] and lessonsData["lessons"][lessonID]["videoLesson"] != None:
+        if "videoLesson" in lessonsData["lessons"][lessonID] and lessonsData["lessons"][lessonID]["videoLesson"] is not None:
             btn = types.InlineKeyboardButton("Видеоурок", url=lessonsData["lessons"][lessonID]["videoLesson"])
             markup.add(btn)
     else:
@@ -1131,9 +1134,9 @@ def start_lesson(message, lessonID, index):
 def start_test(message, testID, index, score, true=False):
     markup = types.InlineKeyboardMarkup()
     question = ""
-    if index != 1 and true == False:
+    if index != 1 and not true:
         question += "Не верно\nПравильный ответ: " + lessonsData["tests"][testID]["questions"][f"{index-1}variants"]["1"] + "\n\n"
-    if true == True:
+    if true:
         question += "Верно\n\n"
         score+=1
     if index > len(lessonsData["tests"][testID]["questions"])/2:
@@ -1185,7 +1188,7 @@ def sen_cheat_sheets_list(message, subject, userClass):
         if lessonsData["cheat_sheets"][f"{userClass}class"][el]["subject"] == subject:
             btn = types.InlineKeyboardButton(el, callback_data=f"s_theme_list:{subject}:{userClass}:{lessonsData['cheat_sheets'][f'{userClass}class'][el]['id']}")
             markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Выбери тему", reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тему", reply_markup=markup)
 def s_theme_list_p(userClass,id):
     for el in lessonsData["cheat_sheets"][f"{userClass}class"]:
         if lessonsData["cheat_sheets"][f"{userClass}class"][el]["id"] == id:
@@ -1203,7 +1206,7 @@ def s_theme_list(call):
         if el not in ["subject", "id"]:
             btn = types.InlineKeyboardButton(lessonsData["cheat_sheets"][f"{userClass}class"][theme][el]["name"], callback_data=f"sen_cheat_sheets:{userClass}:{Otheme}:{el}")
             markup.add(btn)
-    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Выбери шпаргалку",reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери шпаргалку",reply_markup=markup)
 def sen_cheat_sheets(message, userClass, Otheme, cheat_sheetsID):
     theme = s_theme_list_p(userClass, int(Otheme))
     markup = types.InlineKeyboardMarkup()
@@ -1235,8 +1238,8 @@ def my_room(message):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Пригласить друга", callback_data="invite_frend")
     markup.add(btn)
-    if (info[13] == None):
-        btn = types.InlineKeyboardButton("Выбрать класс", callback_data=f"class_vibor")
+    if (info[13] is None):
+        btn = types.InlineKeyboardButton("Выбрать класс", callback_data="class_vibor")
     else:
         btn = types.InlineKeyboardButton("Изменить класс", callback_data="class_vibor")
     markup.add(btn)
@@ -1288,7 +1291,7 @@ def addAdmin(message):
   for el in users:
     if(message.text.strip() == el[1]):
       chatID = el[3]
-  if chatID == None:
+  if chatID is None:
     bot.send_message(message.chat.id, "Такого пользователя не существует")
     cur.close()
     conn.close()
@@ -1349,11 +1352,11 @@ def rasp(message, schoolID, scholl_class, id):
         for i in range(0, 7):
             cur.execute("SELECT * FROM rasp WHERE class = ? AND day = ?", (scholl_class, i))
             rasp = cur.fetchone()
-            if rasp != None:
+            if rasp is not None:
                 info += "\n<b>"+t[i]+":</b>\n"
                 j = 0
                 for j in range(0, 10):
-                    if rasp[j + 3] != None:
+                    if rasp[j + 3] is not None:
                         info += str(j + 1) + ". " + rasp[j + 3] + "\n"
                     j += 1
             i += 1
@@ -1367,7 +1370,7 @@ def rasp(message, schoolID, scholl_class, id):
     rasp = cur.fetchone()
     cur.close()
     conn.close()
-    if rasp == None:
+    if rasp is None:
         btn = types.InlineKeyboardButton("Добавить расписание", callback_data=f"add_rasp_list:{schoolID}:{scholl_class}")
         markup.add(btn)
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Расписание не задано", reply_markup=markup)
@@ -1377,7 +1380,7 @@ def rasp(message, schoolID, scholl_class, id):
         info = "Расписание:\n"
         i = 0
         for i in range(0,10):
-            if rasp[i+3] != None:
+            if rasp[i+3] is not None:
                 info+=str(i+1) + ". " + rasp[i+3] + "\n"
             i+=1
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=info, reply_markup=markup)
@@ -1406,7 +1409,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
     btn = types.InlineKeyboardButton("Закончить", callback_data=f"rasp:{schoolID}:{school_class}:2")
     markup.add(btn)
     subjects = sorted(subjects)
-    if subject == None:
+    if subject is None:
         for el in subjects:
             btn = types.InlineKeyboardButton(el, callback_data=f"add_dz:{schoolID}:{school_class}:{day}:{number}:{el}")
             markup.add(btn)
@@ -1418,7 +1421,7 @@ def add_dz(message, schoolID, school_class, day = None, number = None, subject =
         cur.execute('DELETE FROM rasp WHERE class = ? AND day = ?', (school_class, day))
     cur.execute('SELECT * FROM rasp WHERE class = ? AND day = ?', (school_class, day))
     temp = cur.fetchone()
-    if temp == None:
+    if temp is None:
         cur.execute('INSERT INTO rasp (class, day, lesson1) VALUES (?, ?, ?)', (school_class, day, subject))
     else:
         cur.execute(f'UPDATE rasp SET lesson{number} = ? WHERE class = ? AND day = ?', (subject, school_class, day))
@@ -1528,12 +1531,12 @@ def ask_dz_step_1(call):
     i = 0
     for i in range(0,10):
         i += 1
-        if rasp[i+2] != None:
+        if rasp[i+2] is not None:
             b = True
             for el in dzs:
                 if el[0] == rasp[i+2]:
                     b = False
-            if b == True:
+            if b:
                 btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"ask_dz_s2:{Odate}:{rasp[i+2]}:{schoolID}:{my_class}")
                 markup.add(btn)
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
@@ -1614,12 +1617,12 @@ def add_homeTask_step_1(message):
     i = 0
     for i in range(0,10):
         i += 1
-        if rasp[i+2] != None:
+        if rasp[i+2] is not None:
             b = True
             for el in dzs:
                 if el[0] == rasp[i+2]:
                     b = False
-            if b == True:
+            if b:
                 btn = types.InlineKeyboardButton(rasp[i+2], callback_data=f"add_homeTask_step_2:{ttempData}:{rasp[i+2]}")
                 markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
@@ -1828,7 +1831,7 @@ def report(call):
         bot.send_message(call.message.chat.id, "Репорты можно отправлять один раз в 12 часов или чаще если репорт окажется полезным")
         return
     bot.delete_message(call.message.chat.id, call.message.message_id)
-    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена". Если он окажется полезным, то вы получите 2 алмаза', reply_markup=cancel_markup)
+    bot.send_message(call.message.chat.id, 'Сейчас вы можете написать предложение или сообщить о баге, если вы не хотите этого делать напишите "Отмена". Если он окажется полезным, то вы получите 2 алмаза и 5 очков рейтинга', reply_markup=cancel_markup)
     bot.register_next_step_handler(call.message, report_send)
 def report_send(message):
     if message.text.lower() == "отмена":
@@ -1851,7 +1854,8 @@ def good_report_btn(call):
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute("UPDATE timeOuts SET report = ? WHERE chatID = ?",(datetime.now().timestamp(), int(userIdStr)))
-    cur.execute("UPDATE users SET diamonds = diamonds + 2 WHERE chatID = ?", (message.chat.id,))
+    cur.execute("UPDATE users SET diamonds = diamonds + 2 WHERE chatID = ?", (int(userIdStr),))
+    cur.execute("UPDATE users SET rating = rating + 5 WHERE chatID = ?", (int(userIdStr),))
     conn.commit()
     cur.close()
     conn.close()
@@ -1907,7 +1911,7 @@ def callback(call):
     elif callRazd[0] == "fourth_register_step":
         conn = sql_conn()
         cur = conn.cursor()
-        cur.execute(f"SELECT schoolID FROM schools WHERE school = ?",(callRazd[1],))
+        cur.execute("SELECT schoolID FROM schools WHERE school = ?",(callRazd[1],))
         school = cur.fetchone()
         cur.execute('UPDATE users SET schoolID = ? WHERE chatID = ?', (school[0], call.message.chat.id))
         cur.execute('UPDATE users SET autorizationStep = ? WHERE chatID = ?', (1, call.message.chat.id))
@@ -1925,9 +1929,9 @@ def callback(call):
     elif callRazd[0] == "school_info":
         conn = sql_conn()
         cur = conn.cursor()
-        cur.execute(f"SELECT * FROM schools WHERE schoolID = ?", (int(callRazd[1]),))
+        cur.execute("SELECT * FROM schools WHERE schoolID = ?", (int(callRazd[1]),))
         info = cur.fetchone()
-        if info == None:
+        if info is None:
             return
         cur.close()
         conn.close()
@@ -2126,7 +2130,7 @@ def send_vibor_obl(call):
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"second_register_step:{el}")
         markup.add(btn)
-    btn = types.InlineKeyboardButton("Другая", callback_data=f"second_register_step_else")
+    btn = types.InlineKeyboardButton("Другая", callback_data="second_register_step_else")
     markup.add(btn)
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text='Выбери область',reply_markup=markup)
 
@@ -2154,7 +2158,7 @@ def send_vibor_sity(message):
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"serd_register_step:{el}")
         markup.add(btn)
-    btn = types.InlineKeyboardButton("Друой", callback_data=f"serd_register_step_else")
+    btn = types.InlineKeyboardButton("Друой", callback_data="serd_register_step_else")
     markup.add(btn)
     bot.send_message(chat_id=message.chat.id, text='Выбери город',reply_markup=markup)
 
@@ -2183,7 +2187,7 @@ def send_vibor_school(message):
     for el in my_array:
         btn = types.InlineKeyboardButton(el, callback_data=f"fourth_register_step:{el}")
         markup.add(btn)
-    btn = types.InlineKeyboardButton("Другая", callback_data=f"fourth_register_step_else")
+    btn = types.InlineKeyboardButton("Другая", callback_data="fourth_register_step_else")
     markup.add(btn)
     bot.send_message(chat_id=message.chat.id, text='Выбери школу',reply_markup=markup)
 
