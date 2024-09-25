@@ -805,10 +805,13 @@ def go_education(message):
     btn = types.InlineKeyboardButton("Тесты", callback_data="tests_list")
     btn1 = types.InlineKeyboardButton("Шпаргалки", callback_data="cheat_sheets_list")
     markup.add(btn, btn1)
+    btn = types.InlineKeyboardButton("Экзамены", callback_data="exams_list")
+    markup.add(btn)
     text = f"Давай начнем обучение.\n\nТы прошел(а):\n{data['education'][str(message.chat.id)]['completed_lesson']} уроков" \
            f"\n{data['education'][str(message.chat.id)]['completed_courses']} учебных курсов\n{data['education'][str(message.chat.id)]['completed_tests']} тестов\n" \
            f"\nСредний балл: {data['education'][str(message.chat.id)]['GPA']}\n\nРешено задач: {data['education'][str(message.chat.id)]['problems_solved']}" \
-           f"\nРешено правильно: {data['education'][str(message.chat.id)]['decided_correctly']}"
+           f"\nРешено правильно: {data['education'][str(message.chat.id)]['decided_correctly']}\n\nПройдено экзаменов: {len(data['education'][str(message.chat.id)]['completed_exams'])}\n" \
+           f"Средний балл за экзамены: {data['education'][str(message.chat.id)]['exams_GPA']}"
     bot.send_message(message.chat.id, text, reply_markup=markup)
 def my_courses(message):
     info = f"Вы прошли {data['education'][str(message.chat.id)]['completed_courses']} учебных курсов"
@@ -909,6 +912,124 @@ def go_course_lesson(message, courseID):
         i = len(lessonsData['courses'][str(courseID)]['lessons'])
     save_data()
     start_lesson(message, lessonsData['courses'][str(courseID)]['lessons'][str(i)], 1)
+
+@bot.callback_query_handler(func=lambda callback: callback.data == 'exams_list')
+def exams_list(call):
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute('SELECT class FROM users WHERE chatID = ?', (call.message.chat.id,))
+    userClass = int(cur.fetchone()[0][0])
+    cur.close()
+    conn.close()
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Другие классы", callback_data="exams_list_else")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Пройденные экзамены", callback_data="completed_exams_list")
+    #markup.add(btn)
+    for el in lessonsData["exams"][f"{userClass}class"]["subjects"]:
+        btn = types.InlineKeyboardButton(lessonsData["subjects"][el], callback_data=f"exams_subject_list:{el}:{userClass}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери предмет", reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data == 'exams_list_else')
+def exams_list_else(call):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    classes = config.classes
+    for el in classes:
+        btn = types.InlineKeyboardButton(str(el), callback_data=f"exams_subject_list_else:{el}")
+        markup.add(btn)
+    bot.edit_message_text(message_id=call.message.message_id,chat_id=call.message.chat.id, text="Выбери класс", reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('exams_subject_list_else:'))
+def exams_subject_list_else(call):
+    userClass = call.data.split(":")[1]
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data="education")
+    markup.add(btn)
+    for el in lessonsData["exams"][f"{userClass}class"]["subjects"]:
+        btn = types.InlineKeyboardButton(lessonsData['subjects'][el], callback_data=f"exams_subject_list:{el}:{userClass}")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери предмет", reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('exams_subject_list:'))
+def lessons_theme_list(call):
+    message, subject, userClass = call.data.split(":")
+    message = call.message
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Назад", callback_data=f"lessons_subject_list:{subject}:{userClass}")
+    markup.add(btn)
+    for el in lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"]:
+        btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][el]["name"], callback_data=f"exam:{userClass}:{subject}:{el}:1:1:0:0")
+        markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери экзамен",reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam:'))
+def exam(call):
+    message, userClass, subject, examID, examType, step, score, status = call.data.split(":")
+    message = call.message
+    markup = types.InlineKeyboardMarkup()
+    text = ""
+    if status == "1":
+        score = int(score)+1
+        text += "Верно\n\n"
+    else:
+        text += "Не верно\n\n"
+    if int(step) >= 10:
+        markup.add(types.InlineKeyboardButton("Назад", callback_data="education"))
+        markup.add(types.InlineKeyboardButton("Характеристика", callback_data=f"exam_statistic"))
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Экзамен из 10 вопросов завершен\n\nПравильных ответов: {score}",reply_markup=markup)
+        return
+    step = int(step) + 1
+    questionGroupId = random.choice(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][examID]["types"][examType])
+    questionId = str(random.randint(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId])))
+    examQType = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["type"]
+    if examQType == 3:
+        examQType = random.randint(1, 2)
+    text += f'Уровень: <b>{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"]}</b>\n\n{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"]}'
+    match examQType:
+        case 1:
+            text+="\n\nВыберите правильный вариант ответа"
+            btns = []
+            btn = types.InlineKeyboardButton(
+                lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0],
+                callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:1")
+            btns.append(btn)
+            i = 1
+            for i in range(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"])):
+                btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][i],
+                                                 callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
+                btns.append(btn)
+                i+=1
+            random.shuffle(btns)
+            for btn in btns:
+                markup.add(btn)
+        case 2:
+            text+="\n\nНапишите правильный вариант"
+            answer = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0]
+            tempData["usersData"][str(message.chat.id)]["exam_question"] = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"]
+            bot.register_next_step_handler(message, ansver_to_exam_question, userClass, subject, examID, examType, step, score, answer, message.message_id)
+            markup = types.InlineKeyboardMarkup()
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=text, reply_markup=markup, parse_mode="HTML")
+
+def ansver_to_exam_question(message, userClass, subject, examID, examType, step, score, answer, bot_message_id):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
+    if message.text.lower() == answer.lower():
+        btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:1")
+    markup.add(btn)
+    tempData["usersData"][str(message.chat.id)]["exam_answer"] = answer
+    btn = types.InlineKeyboardButton("Отмена", callback_data=f"c_q_exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}")
+    markup.add(btn)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=bot_message_id, text=f'Вы уверены в ответе "{message.text}"?', reply_markup=markup)
+    bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('c_q_exam:'))
+def cancel_questoin_exam(call):
+    message, userClass, subject, examID, examType, step, score = call.data.split(":")
+    message = call.message
+    markup = types.InlineKeyboardMarkup()
+    bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Ответьте на вопрос\n\n"+tempData["usersData"][str(message.chat.id)]["exam_question"], reply_markup=markup)
+    bot.register_next_step_handler(message, ansver_to_exam_question, userClass, subject, examID, examType, step, score, tempData["usersData"][str(message.chat.id)]["exam_answer"])
+
 def lessons_list(message):
     conn = sql_conn()
     cur = conn.cursor()
@@ -1327,7 +1448,7 @@ def school_info(message):
     btn = types.InlineKeyboardButton("Расписание на неделю", callback_data=f"rasp:{schoolID}:{my_class}:2")
     markup.add(btn)
     btn = types.InlineKeyboardButton("Новости", callback_data=f"news:{schoolID}:{my_class}")
-    markup.add(btn)
+    #markup.add(btn)
     btn1 = types.InlineKeyboardButton("Дз", callback_data=f"homeTask:{schoolID}:{my_class}:0")
     btn2 = types.InlineKeyboardButton("ГДЗ", callback_data="GDZ")
     markup.add(btn1, btn2)
@@ -1667,6 +1788,9 @@ def add_homeTask_step_3(message):
         "answers":[message.chat.id]
     }
     save_data()
+    if len(students) <= 3:
+        add_homeTask_step_4(schoolID, my_class, add_dz_id)
+        return
     markup = types.InlineKeyboardMarkup()
     btn0 = types.InlineKeyboardButton("Да", callback_data=f"add_dz_rait:good:{schoolID}:{my_class}:{add_dz_id}")
     btn1 = types.InlineKeyboardButton("Нет", callback_data=f"add_dz_rait:bad:{schoolID}:{my_class}:{add_dz_id}")
