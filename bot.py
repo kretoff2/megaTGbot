@@ -55,6 +55,9 @@ data = {
     },
     "schoolsData":{
 
+    },
+    "examsData":{
+
     }
 }
 
@@ -119,6 +122,18 @@ def delOldDz(message=None):
         cur.close()
         conn.close()
         i += 1
+    for schoolID in data["schoolsData"]:
+        for my_class in data["schoolsData"][schoolID]:
+            array = []
+            for el in data["schoolsData"][schoolID][my_class]["add_dz"]:
+                date_string = data["schoolsData"][schoolID][my_class]["add_dz"][el]["date"]
+                date_object = datetime.strptime(date_string, "%d.%m.%Y")
+                timestamp = int(date_object.timestamp())
+                if timestamp + 86400 < datetime.now().timestamp():
+                    array.append(el)
+            for ell in array:
+                del data["schoolsData"][schoolID][my_class]["add_dz"][ell]
+    save_data()
     if message is not None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
     else: print("Старое дз за последние 10 дней удалено")
 @bot.message_handler(commands=['clicker'])
@@ -231,8 +246,18 @@ def main(message):
                         (refer_id, message.chat.id))
             bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
         conn.commit()
+        cur.execute("SELECT count(*) FROM users WHERE autorizationStep != 0")
+        col = cur.fetchone()[0]
         cur.close()
         conn.close()
+        bot.send_message(message.chat.id,
+                         f"Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.\n\nУже зарегестрировались {col}")
+        markup = types.InlineKeyboardMarkup()
+        btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
+        btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
+        markup.row(btnBel)
+        markup.row(btnRus)
+        bot.send_message(message.chat.id, "Выбери страну", reply_markup=markup)
     elif user[6] == 0:
         conn = sql_conn()
         cur = conn.cursor()
@@ -960,44 +985,86 @@ def lessons_theme_list(call):
     btn = types.InlineKeyboardButton("Назад", callback_data=f"lessons_subject_list:{subject}:{userClass}")
     markup.add(btn)
     for el in lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"]:
-        btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][el]["name"], callback_data=f"exam:{userClass}:{subject}:{el}:1:1:0:0")
+        btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][el]["name"], callback_data=f"exam:{userClass}:{subject}:{el}:1:0:0:0")
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери экзамен",reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam_statistic'))
+def exam_statistic(call):
+    seeType:None
+    if len(i := call.data.split(":")) >= 2:
+        seeType = i[1]
+    bot.send_message(call.message.chat.id, "Абонент временно не доступен перезвоните позже")
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id, timeout=5)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam:'))
 def exam(call):
     message, userClass, subject, examID, examType, step, score, status = call.data.split(":")
     message = call.message
     markup = types.InlineKeyboardMarkup()
     text = ""
-    if status == "1":
+    if status == "0":
         score = int(score)+1
         text += "Верно\n\n"
     else:
+        if status == "N":
+            ...
         text += "Не верно\n\n"
+    if str(message.chat.id) not in data["examsData"]:
+        data["examsData"][str(message.chat.id)] = {"last":{}}
     if int(step) >= 10:
         markup.add(types.InlineKeyboardButton("Назад", callback_data="education"))
-        markup.add(types.InlineKeyboardButton("Характеристика", callback_data=f"exam_statistic"))
-        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Экзамен из 10 вопросов завершен\n\nПравильных ответов: {score}",reply_markup=markup)
+        markup.add(types.InlineKeyboardButton("Характеристика", callback_data=f"exam_statistic:last"))
+        bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Экзамен из 10 вопросов завершен\n\nПравильных ответов: {score}", reply_markup=markup)
+        data['education'][str(message.chat.id)]['exams_GPA'] = (data['education'][str(message.chat.id)]['exams_GPA'] + int(score)) / 2
+        if len(data['education'][str(message.chat.id)]['completed_exams']) == 0:
+            data['education'][str(message.chat.id)]['exams_GPA'] = int(score)
+        if examID not in data['education'][str(message.chat.id)]['completed_exams']:
+            data['education'][str(message.chat.id)]['completed_exams'][examID] = {
+                "count": 1,
+                "answers" : int(step),
+                "correctAnswers": int(score)
+            }
+        else:
+            data['education'][str(message.chat.id)]['completed_exams'][examID]["count"] += 1
+            data['education'][str(message.chat.id)]['completed_exams'][examID]["answers"] += int(step)
+            data['education'][str(message.chat.id)]['completed_exams'][examID]["correctAnswers"] += int(score)
+        save_data()
         return
-    step = int(step) + 1
     questionGroupId = random.choice(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][examID]["types"][examType])
     questionId = str(random.randint(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId])))
     examQType = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["type"]
     if examQType == 3:
         examQType = random.randint(1, 2)
+    if str(step) == "0":
+        data["examsData"][str(message.chat.id)]["last"] = {
+            "questions":{},
+            "class": userClass,
+            "subject": subject,
+            "startTime": int(datetime.now().timestamp()),
+            "endTime" : None
+        }
+    else:
+        data["examsData"][str(message.chat.id)]["last"]["questions"][str(step)] = {
+            "questionGroup": questionGroupId,
+            "questionId": questionId,
+            "questionLevel": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"],
+            "question": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"],
+            "answer": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0]
+        }
+    save_data()
     text += f'Уровень: <b>{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"]}</b>\n\n{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"]}'
+    step = int(step) + 1
     match examQType:
         case 1:
             text+="\n\nВыберите правильный вариант ответа"
             btns = []
             btn = types.InlineKeyboardButton(
                 lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0],
-                callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:1")
+                callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
             btns.append(btn)
             i = 1
             for i in range(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"])):
                 btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][i],
-                                                 callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
+                                                 callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:{i}")
                 btns.append(btn)
                 i+=1
             random.shuffle(btns)
@@ -1013,9 +1080,11 @@ def exam(call):
 
 def ansver_to_exam_question(message, userClass, subject, examID, examType, step, score, answer, bot_message_id):
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
+    data["examsData"][str(message.chat.id)]["last"]["questions"][str(int(step)-1)]["yourAnswer"] = message.text
+    save_data()
+    btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:N")
     if message.text.lower() == answer.lower():
-        btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:1")
+        btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:0")
     markup.add(btn)
     tempData["usersData"][str(message.chat.id)]["exam_answer"] = answer
     btn = types.InlineKeyboardButton("Отмена", callback_data=f"c_q_exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}")
@@ -1028,7 +1097,7 @@ def cancel_questoin_exam(call):
     message = call.message
     markup = types.InlineKeyboardMarkup()
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Ответьте на вопрос\n\n"+tempData["usersData"][str(message.chat.id)]["exam_question"], reply_markup=markup)
-    bot.register_next_step_handler(message, ansver_to_exam_question, userClass, subject, examID, examType, step, score, tempData["usersData"][str(message.chat.id)]["exam_answer"])
+    bot.register_next_step_handler(message, ansver_to_exam_question, userClass, subject, examID, examType, step, score, tempData["usersData"][str(message.chat.id)]["exam_answer"], message.message_id)
 
 def lessons_list(message):
     conn = sql_conn()
@@ -1928,11 +1997,13 @@ def main(message):
         kretoffSchool(message)
     elif message.text == "Магазин 🛍️":
         openShop(message)
+    elif message.text.lower() == "але":
+        bot.send_message(message.chat.id, "Абонент временно не доступен перезвоните позже")
     else:
         markup = types.InlineKeyboardMarkup()
         btn = types.InlineKeyboardButton("Подписаться", url="https://t.me/kretoffer_school_chanel")
         markup.add(btn)
-        if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил"]:
+        if message.text.lower() in ["ты лох", "ты дурак", "ты ужасен", "ты худший", "ты дебил", "ты пидарас"]:
             bot.send_message(message.chat.id, f"Сам {message.text.lower()}! 😤")
             if bot.get_chat_member(config.CHANEL_ID, message.chat.id).status not in ["member", "administrator", "creator"]:
                 bot.send_message(message.chat.id, "Вы еще не подписаны на наш канал, там вы можете найти что-то интересное", reply_markup=markup)
