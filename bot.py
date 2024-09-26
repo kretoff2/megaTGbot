@@ -2331,14 +2331,14 @@ def send_vibor_obl(call):
 
 def else_obl(message):
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["obl"] = message.text
     save_data()
-    send_vibor_sity(message)
+    send_vibor_sity(message, tempData["usersData"][str(message.chat.id)]["MessageID"])
 
-def send_vibor_sity(message):
+def send_vibor_sity(message, messageID = None):
+    if messageID is None:
+        messageID = message.message_id
     markup = types.InlineKeyboardMarkup()
-
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT sity FROM schools WHERE contry = ? AND obl = ?', (data["usersData"][f"{message.chat.id}"]["contry"], data["usersData"][f"{message.chat.id}"]["obl"]))
@@ -2355,18 +2355,18 @@ def send_vibor_sity(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Друой", callback_data="serd_register_step_else")
     markup.add(btn)
-    bot.send_message(chat_id=message.chat.id, text='Выбери город',reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id,message_id=messageID, text='Выбери город',reply_markup=markup)
 
 def else_sity(message):
     bot.delete_message(message.chat.id, message.message_id)
-    bot.delete_message(message.chat.id, tempData["usersData"][str(message.chat.id)]["MessageID"])
     data["usersData"][f"{message.chat.id}"]["sity"] = message.text
     save_data()
-    send_vibor_school(message)
+    send_vibor_school(message, tempData["usersData"][str(message.chat.id)]["MessageID"])
 
-def send_vibor_school(message):
+def send_vibor_school(message, messageID = None):
+    if messageID is None:
+        messageID = message.message_id
     markup = types.InlineKeyboardMarkup()
-
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT school FROM schools WHERE contry = ? AND obl = ? AND sity = ?',
@@ -2384,7 +2384,7 @@ def send_vibor_school(message):
         markup.add(btn)
     btn = types.InlineKeyboardButton("Другая", callback_data="fourth_register_step_else")
     markup.add(btn)
-    bot.send_message(chat_id=message.chat.id, text='Выбери школу',reply_markup=markup)
+    bot.edit_message_text(chat_id=message.chat.id, message_id=messageID, text='Выбери школу',reply_markup=markup)
 
 def else_school(message):
     conn = sql_conn()
