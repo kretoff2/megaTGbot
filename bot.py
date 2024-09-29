@@ -136,31 +136,6 @@ def delOldDz(message=None):
     save_data()
     if message is not None: bot.send_message(message.chat.id, "Старое дз на 10 дней назад удалено")
     else: print("Старое дз за последние 10 дней удалено")
-@bot.message_handler(commands=['clicker'])
-def clicker(message):
-    conn = sql_conn()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM clicker WHERE chatID = ?", (message.chat.id,))
-    user = cur.fetchone()
-    if user is None: cur.execute("INSERT INTO clicker (chatID, clicks, energy, maxEnergy, multitap, boost, megaEnergy, lastSeen) VALUES (%s, '%s', %s, %s, %s, %s, %s, %s)" % (message.chat.id, "0", 500, 500, 1, 10, 10, 0))
-    conn.commit()
-    cur.close()
-    conn.close()
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    photos = bot.get_user_profile_photos(message.chat.id)
-    a = f"http://{config.ADRES}/?userID={message.chat.id}"
-    #a = "https://open.spotify.com"
-    if photos.total_count > 0:
-        photo = photos.photos[0][-1]
-        file_info = bot.get_file(photo.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        image = Image.open(io.BytesIO(downloaded_file))
-        image = image.resize((128, 128), Image.Resampling.LANCZOS)
-        image.save(f"./data/imgs/{message.chat.id}.jpg")
-    #web_app_info = types.WebAppInfo(a)
-    web_app = types.InlineKeyboardButton(text="Тапать", url=a)
-    markup.add(web_app)
-    bot.send_message(message.chat.id, "Привет! Добро пожаловать в кликер. Касайтесь экрана, собирайте монеты, увеличивайте свой пассивный доход, разработать собственную стратегию получения дохода. Коины полученые в кликере можно будет использовать в @kretoffer_school_bot. Не забывайте о своих друзьях — приводите их в игру и вместе зарабатывайте еще больше монет!", reply_markup=markup)
 @bot.message_handler(commands=['allMessage'])
 def main(message):
   if (message.chat.id != config.ADMIN_ID):
