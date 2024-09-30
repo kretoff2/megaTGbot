@@ -17,6 +17,8 @@ btn = types.InlineKeyboardButton("Баги и предложения", callback_
 settings_markup.add(btn)
 btn = types.InlineKeyboardButton("Тех. поддержка", url="https://t.me/kretoffik")
 settings_markup.add(btn)
+btn = types.InlineKeyboardButton("О боте", callback_data="about_bot")
+settings_markup.add(btn)
 
 cancel_markup = types.ReplyKeyboardMarkup(row_width=1)
 btn = types.KeyboardButton("Отмена")

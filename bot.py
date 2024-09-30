@@ -791,6 +791,7 @@ def go_education(message):
         data['education'][str(message.chat.id)]['complet_tests'] = {}
         data['education'][str(message.chat.id)]['completed_courses'] = 0
         data['education'][str(message.chat.id)]['completed_exams'] = {}
+        data['education'][str(message.chat.id)]['complet_exams'] = 0
         data['education'][str(message.chat.id)]['GPA'] = 0
         data['education'][str(message.chat.id)]['exams_GPA'] = 0
         data['education'][str(message.chat.id)]['problems_solved'] = 0
@@ -960,7 +961,7 @@ def lessons_theme_list(call):
     btn = types.InlineKeyboardButton("Назад", callback_data=f"lessons_subject_list:{subject}:{userClass}")
     markup.add(btn)
     for el in lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"]:
-        btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][el]["name"], callback_data=f"exam:{userClass}:{subject}:{el}:1:0:0:0")
+        btn = types.InlineKeyboardButton(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][el]["name"], callback_data=f"exam:{userClass}:{subject}:{el}:1:0:0:N")
         markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери экзамен",reply_markup=markup)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam_statistic'))
@@ -968,7 +969,19 @@ def exam_statistic(call):
     seeType:None
     if len(i := call.data.split(":")) >= 2:
         seeType = i[1]
-    bot.send_message(call.message.chat.id, "Абонент временно не доступен перезвоните позже")
+    if seeType == "last":
+        examID = data["examsData"][str(call.message.chat.id)]["last"]["examID"]
+        userClass = data["examsData"][str(call.message.chat.id)]["last"]["class"]
+        subject = data["examsData"][str(call.message.chat.id)]["last"]["subject"]
+        examName = lessonsData['exams'][f'{userClass}class']['subjects'][subject]['exams'][examID]["name"]
+        info = "Последний экзамен:\n\n" \
+               f"{examName}\n{lessonsData['subjects'][subject]} {userClass} класс\n\n"\
+                "Вопросы:\n"
+        for el in data["examsData"][str(call.message.chat.id)]["last"]["questions"]:
+            info += f"{el}. {data['examsData'][str(call.message.chat.id)]['last']['questions'][el]['question']}\n" \
+                    f"Правильный ответ: {data['examsData'][str(call.message.chat.id)]['last']['questions'][el]['answer']}\n" \
+                    f"Ответ пользователя: {data['examsData'][str(call.message.chat.id)]['last']['questions'][el]['userAnswer']}\n\n"
+    bot.send_message(call.message.chat.id, info)
     bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id, timeout=5)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam:'))
 def exam(call):
@@ -989,19 +1002,27 @@ def exam(call):
         markup.add(types.InlineKeyboardButton("Назад", callback_data="education"))
         markup.add(types.InlineKeyboardButton("Характеристика", callback_data=f"exam_statistic:last"))
         bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Экзамен из 10 вопросов завершен\n\nПравильных ответов: {score}", reply_markup=markup)
-        data['education'][str(message.chat.id)]['exams_GPA'] = (data['education'][str(message.chat.id)]['exams_GPA'] + int(score)) / 2
+        data['education'][str(message.chat.id)]['exams_GPA'] = round((data['education'][str(message.chat.id)]['exams_GPA'] + int(score)) / 2, 2)
+        data["examsData"][str(message.chat.id)]["last"]["endTime"] = int(datetime.now().timestamp())
         if len(data['education'][str(message.chat.id)]['completed_exams']) == 0:
             data['education'][str(message.chat.id)]['exams_GPA'] = int(score)
+        if userClass not in data['education'][str(message.chat.id)]['completed_exams']:
+            data['education'][str(message.chat.id)]['completed_exams'][userClass] = {
+                subject: {}
+            }
+        elif subject not in data['education'][str(message.chat.id)]['completed_exams'][userClass]:
+            data['education'][str(message.chat.id)]['completed_exams'][userClass][subject] = {}
         if examID not in data['education'][str(message.chat.id)]['completed_exams']:
-            data['education'][str(message.chat.id)]['completed_exams'][examID] = {
+            data['education'][str(message.chat.id)]['complet_exams'] += 1
+            data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID] = {
                 "count": 1,
                 "answers" : int(step),
                 "correctAnswers": int(score)
             }
         else:
-            data['education'][str(message.chat.id)]['completed_exams'][examID]["count"] += 1
-            data['education'][str(message.chat.id)]['completed_exams'][examID]["answers"] += int(step)
-            data['education'][str(message.chat.id)]['completed_exams'][examID]["correctAnswers"] += int(score)
+            data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["count"] += 1
+            data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["answers"] += int(step)
+            data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["correctAnswers"] += int(score)
         save_data()
         return
     questionGroupId = random.choice(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][examID]["types"][examType])
@@ -1011,6 +1032,7 @@ def exam(call):
         examQType = random.randint(1, 2)
     if str(step) == "0":
         data["examsData"][str(message.chat.id)]["last"] = {
+            "examID": examID,
             "questions":{},
             "class": userClass,
             "subject": subject,
@@ -1018,12 +1040,15 @@ def exam(call):
             "endTime" : None
         }
     else:
+        if status == "0":
+            u = "Верный"
+        else:
+            u = "Не верный"
         data["examsData"][str(message.chat.id)]["last"]["questions"][str(step)] = {
-            "questionGroup": questionGroupId,
-            "questionId": questionId,
             "questionLevel": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"],
             "question": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"],
-            "answer": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0]
+            "answer": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0],
+            "userAnswer": u
         }
     save_data()
     text += f'Уровень: <b>{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"]}</b>\n\n{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"]}'
@@ -1055,7 +1080,7 @@ def exam(call):
 
 def ansver_to_exam_question(message, userClass, subject, examID, examType, step, score, answer, bot_message_id):
     markup = types.InlineKeyboardMarkup()
-    data["examsData"][str(message.chat.id)]["last"]["questions"][str(int(step)-1)]["yourAnswer"] = message.text
+    #data["examsData"][str(message.chat.id)]["last"]["questions"][str(step)]["yourAnswer"] = message.text
     save_data()
     btn = types.InlineKeyboardButton("Подтвердить", callback_data=f"exam:{userClass}:{subject}:{examID}:{examType}:{step}:{score}:N")
     if message.text.lower() == answer.lower():
@@ -1963,7 +1988,7 @@ def main(message):
     if message.text == "Личный кабинет 🪪":
         my_room(message)
     elif message.text == "Настройки ⚙️":
-        bot.send_message(message.chat.id, "Раздел находится в разработке", reply_markup=settings_markup)
+        bot.send_message(message.chat.id, "Настройки", reply_markup=settings_markup)
     elif message.text == "Обучение 📖":
         go_education(message)
     elif message.text == "Школа 🏫":
@@ -1986,6 +2011,15 @@ def main(message):
         bot.send_message(message.chat.id, "Я вас не понимаю")
         if bot.get_chat_member(config.CHANEL_ID, message.chat.id).status not in ["member", "administrator", "creator"]:
             bot.send_message(message.chat.id, "Вы еще не подписаны на наш канал, там вы можете найти что-то интересное",reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data == "about_bot")
+def about_bot(call):
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton("Последнее обновление", callback_data="bot_update")
+    markup.add(btn)
+    bot.send_message(call.message.chat.id, config.bot_info, reply_markup=markup, parse_mode="HTML")
+@bot.callback_query_handler(func=lambda callback: callback.data == "bot_update")
+def about_bot(call):
+    bot.send_message(call.message.chat.id, config.last_update_info, parse_mode="HTML")
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith("report_btn"))
 def report(call):
     conn = sql_conn()
