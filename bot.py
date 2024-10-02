@@ -10,6 +10,9 @@ import config
 from pathlib import Path
 import requests
 from my_libs.markups import *
+import my_libs.handbook
+import my_libs.sql_commands
+from my_libs.sql_commands import SQL_connection, SQL_one_command
 from PIL import Image
 import io
 
@@ -22,8 +25,7 @@ tempData = {
 }
 
 def sql_conn():
-    conn = sql.connect("db.sql")
-    return conn
+    return my_libs.sql_commands.sql_conn()
 
 conn = sql_conn()
 cur = conn.cursor()
@@ -32,7 +34,7 @@ cur.execute('CREATE TABLE IF NOT EXISTS schools(id int auto_increment primary ke
 cur.execute('CREATE TABLE IF NOT EXISTS bags (id int auto_increment primary key, date varchar(50), user varchar(100), bag varchar(5000), bagId int)')
 cur.execute('CREATE TABLE IF NOT EXISTS admins (id int auto_increment primary key, name varchar(50), chatID int)')
 cur.execute('CREATE TABLE IF NOT EXISTS news (id int auto_increment primary key, date varchar(50), news varchar(5000), NewsId int)')
-cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int)')
+cur.execute('CREATE TABLE IF NOT EXISTS timeOuts (chatID int primary key, report int, selectClass int, selectSchool int, rep int)')
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Беларусь"))
 #cur.execute('INSERT INTO schools (contry) VALUES ("%s")' % ("Россия"))
 #cur.execute("UPDATE users SET coins = 100000 WHERE chatID = ?", (config.ADMIN_ID,))
@@ -58,6 +60,9 @@ data = {
     },
     "examsData":{
 
+    },
+    "reviews":{
+
     }
 }
 
@@ -82,6 +87,75 @@ def my_markup():
     btn = types.KeyboardButton("Магазин 🛍️")
     markup.add(btn)
     return markup
+@bot.message_handler(commands=['class'])
+def main(message):
+    info = "Твой класс:\n\n"
+    conn = sql_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT schoolID, class FROM users WHERE chatID = ?", (message.chat.id,))
+    schoolID, userClass = cur.fetchone()
+    cur.execute("SELECT first_name, last_name, rating FROM users WHERE schoolID = ? AND class = ?", (schoolID, userClass))
+    users = cur.fetchall()
+    cur.close()
+    conn.close()
+    for el in users:
+        info += el[0] + " "
+        if el[1] != "None":
+            info += el[1]
+        info += "— " + str(el[2])+ " очков рейтинга\n\n"
+    bot.send_message(message.chat.id, info)
+@bot.message_handler(commands=['r', 'rep', 'rating'])
+def main(message):
+    bot.send_message(message.chat.id, "С помощью команд /r /rep /rating вы можете менять рейтинг другим людям (путем 👍 и 👎). Если вы хотите оставить отзыв о человека выберите его", reply_markup=rep_markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data == "rep_classmates")
+def rep_classmates(call):
+    conn = SQL_connection()
+    user = conn.SQL_fetchone("SELECT schoolID, class FROM users WHERE chatID = ?", (call.message.chat.id,))
+    users = conn.SQL_fetchall("SELECT chatID, first_name, last_name FROM users WHERE schoolID = ? AND class = ? AND chatID <> ?", (user[0], user[1], call.message.chat.id))
+    conn.sql_close()
+    markup = types.InlineKeyboardMarkup()
+    for el in users:
+        name = el[1]
+        if el[2] != "None":
+            name += " " + el[2]
+        markup.add(types.InlineKeyboardButton(name, callback_data=f"rep_cm:{el[0]}"))
+    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('rep_cm:'))
+def rep_cm(call):
+    chatID = int(call.data.split(":")[1])
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    markup.row(types.KeyboardButton("👍"), types.KeyboardButton("👎"))
+    markup.add(types.KeyboardButton("Отмена"))
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    userName = SQL_one_command("SELECT first_name FROM users WHERE chatID = ?", (chatID,), fetchMode="one").data[0]
+    botMessageID = bot.send_message(call.message.chat.id, f"Поставьте отметку для {userName}", reply_markup=markup).message_id
+    bot.register_next_step_handler(call.message, rep_cm_step2, chatID, botMessageID)
+
+def rep_cm_step2(message, chatID, bot_message_id):
+    bot.delete_message(message.chat.id, bot_message_id)
+    bot.delete_message(message.chat.id, message_id=message.message_id)
+    if message.text == "Отмена":
+        return
+    conn = SQL_connection()
+    x = conn.SQL_fetchone("SELECT rep FROM timeOuts WHERE chatID = ?", (message.chat.id,))
+    conn.sql_close()
+    if x[0] > datetime.now().timestamp():
+        bot.send_message(message.chat.id,
+                         "Вам пока что нельзя пользоваться командой /rep. Ей можно пользоваться 1 раз в 1 час. Или раз в 10 минут с <b>kretoffer school premium</b>",
+                         parse_mode="HTML")
+        return
+    conn = SQL_connection()
+    if message.text == "👍":
+        conn.sql_command("UPDATE users SET rating = rating + 1 WHERE chatID = ?", (chatID,))
+    elif message.text == "👎":
+        conn.sql_command("UPDATE users SET rating = rating - 1 WHERE chatID = ?", (chatID,))
+    conn.sql_command("UPDATE timeOuts SET rep = ? WHERE chatID = ?", (datetime.now().timestamp() + 3600, message.chat.id))
+    conn.sql_save()
+    user = conn.SQL_fetchone("SELECT first_name, rating FROM users WHERE chatID = ?", (chatID,))
+    conn.sql_close()
+    bot.send_message(message.chat.id, f"Ваш отзыв отправлен, теперь рейтинг {user[0]} равен {user[1]}")
 @bot.message_handler(commands=['delOldDz'])
 def main(message):
     if message.chat.id != config.ADMIN_ID:
@@ -2016,6 +2090,12 @@ def about_bot(call):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Последнее обновление", callback_data="bot_update")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Справочник", callback_data="handbook")
+    #markup.add(btn)
+    bot.send_message(call.message.chat.id, config.bot_info, reply_markup=markup, parse_mode="HTML")
+@bot.callback_query_handler(func=lambda callback: callback.data == "handbook")
+def about_bot(call):
+    markup = types.InlineKeyboardMarkup()
     bot.send_message(call.message.chat.id, config.bot_info, reply_markup=markup, parse_mode="HTML")
 @bot.callback_query_handler(func=lambda callback: callback.data == "bot_update")
 def about_bot(call):

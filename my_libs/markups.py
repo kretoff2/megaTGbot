@@ -24,6 +24,10 @@ cancel_markup = types.ReplyKeyboardMarkup(row_width=1)
 btn = types.KeyboardButton("Отмена")
 cancel_markup.add(btn)
 
+rep_markup = types.InlineKeyboardMarkup()
+rep_markup.add(types.InlineKeyboardButton("Одноклассники", callback_data="rep_classmates"))
+#rep_markup.add(types.InlineKeyboardButton("Другие", callback_data="rep_other"))
+
 class report_repli_markup(types.InlineKeyboardMarkup):
     def __init__(self, userID):
         super().__init__()
