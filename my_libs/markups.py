@@ -28,6 +28,11 @@ rep_markup = types.InlineKeyboardMarkup()
 rep_markup.add(types.InlineKeyboardButton("Одноклассники", callback_data="rep_classmates"))
 #rep_markup.add(types.InlineKeyboardButton("Другие", callback_data="rep_other"))
 
+yes_or_no_markup = types.ReplyKeyboardMarkup(row_width=1)
+btn0 = types.KeyboardButton("Да")
+btn1 = types.KeyboardButton("Нет")
+yes_or_no_markup.row(btn0, btn1)
+
 class report_repli_markup(types.InlineKeyboardMarkup):
     def __init__(self, userID):
         super().__init__()

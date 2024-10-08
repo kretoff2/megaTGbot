@@ -9,12 +9,14 @@ import json
 import config
 from pathlib import Path
 import requests
+
 from my_libs.markups import *
 import my_libs.handbook
+import my_libs.ExLevel
 import my_libs.sql_commands
 from my_libs.sql_commands import SQL_connection, SQL_one_command
-from PIL import Image
-import io
+#from PIL import Image
+#import io
 
 bot = telebot.TeleBot(config.bot)
 
@@ -144,7 +146,7 @@ def rep_cm_step2(message, chatID, bot_message_id):
     if x[0] > datetime.now().timestamp():
         bot.send_message(message.chat.id,
                          "Вам пока что нельзя пользоваться командой /rep. Ей можно пользоваться 1 раз в 1 час. Или раз в 10 минут с <b>kretoffer school premium</b>",
-                         parse_mode="HTML")
+                         parse_mode="HTML", reply_markup=my_markup())
         return
     conn = SQL_connection()
     if message.text == "👍":
@@ -155,7 +157,7 @@ def rep_cm_step2(message, chatID, bot_message_id):
     conn.sql_save()
     user = conn.SQL_fetchone("SELECT first_name, rating FROM users WHERE chatID = ?", (chatID,))
     conn.sql_close()
-    bot.send_message(message.chat.id, f"Ваш отзыв отправлен, теперь рейтинг {user[0]} равен {user[1]}")
+    bot.send_message(message.chat.id, f"Ваш отзыв отправлен, теперь рейтинг {user[0]} равен {user[1]}", reply_markup=my_markup())
 @bot.message_handler(commands=['delOldDz'])
 def main(message):
     if message.chat.id != config.ADMIN_ID:
@@ -386,7 +388,63 @@ def openShop(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Алмазы за монеты", callback_data="buy_diamonds_1")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Подарить монеты", callback_data="give_coins")
+    markup.add(btn)
     bot.send_message(message.chat.id, f"<b>Баланс:</b>\nМонеты:{user[10]}\nАлмазы:{user[11]}\n\n<b>Магазин:</b>", reply_markup=markup, parse_mode='HTML')
+@bot.callback_query_handler(func=lambda callback: callback.data == "give_coins")
+def give_coins_s1(call):
+    bot.send_message(call.message.chat.id, "Напишите ID человека которому вы хотите подарить монеты", reply_markup=cancel_markup)
+    bot.register_next_step_handler(call.message, give_coins_s2)
+def give_coins_s2(message):
+    if message.text == "Отмена":
+        bot.send_message(message.chat.id, "Отменено", reply_markup=my_markup())
+        return
+    try:
+        chatID = int(message.text)
+    except ValueError:
+        bot.send_message(message.chat.id, "Кажется вы вписали не chatID, попробуйте ввести его снова")
+        bot.register_next_step_handler(message, give_coins_s2)
+        return
+    chatID = SQL_one_command("SELECT chatID FROM users WHERE chatID = ?", (chatID,), fetchMode="one").data[0]
+    if chatID == None:
+        bot.send_message(message.chat.id, "Кажется вы вписали недействительный chatID, попробуйте ввести его снова")
+        bot.register_next_step_handler(message, give_coins_s2)
+        return
+    bot.send_message(message.chat.id, "Впишите количество монет которое вы хотите подарить")
+    bot.register_next_step_handler(message, give_coins_s3, chatID)
+def give_coins_s3(message, chatID):
+    if message.text == "Отмена":
+        bot.send_message(message.chat.id, "Отменено", reply_markup=my_markup())
+        return
+    try:
+        coins = int(message.text)
+    except ValueError:
+        bot.send_message(message.chat.id, "Кажется вы вписали не число, попробуйте ввести его снова")
+        bot.register_next_step_handler(message, give_coins_s3, chatID)
+        return
+    commision = int(coins)*0.03
+    userName = SQL_one_command("SELECT first_name FROM users WHERE chatID = ?", (chatID,), fetchMode="one").data[0]
+    bot.send_message(message.chat.id, f"Вы точно хотите подарить {coins} монет {userName}. В качестве комисии с вас спишут {commision} монет. Всего спишут {coins+commision}", reply_markup=yes_or_no_markup)
+    bot.register_next_step_handler(message, give_coins_s4, chatID, coins, commision)
+def give_coins_s4(message, chatID, coins, commision):
+    if message.text == "Нет":
+        bot.send_message(message.chat.id, "Подарок отменен", reply_markup=my_markup())
+        return
+    elif message.text == "Да":
+        userCoins = SQL_one_command("SELECT coins FROM users WHERE chatID = ?", (message.chat.id,), fetchMode="one").data[0]
+        if userCoins < coins:
+            bot.send_message(message.chat.id, "У вас недостаточно монет", reply_markup=my_markup())
+            return
+        conn = SQL_connection()
+        conn.sql_command("UPDATE users SET coins = coins - ? WHERE chatID = ?", (coins+commision, message.chat.id))
+        conn.sql_command("UPDATE users SET coins = coins + ? WHERE chatID = ?", (coins, chatID))
+        conn.sql_save()
+        conn.sql_close()
+        bot.send_message(message.chat.id, f"Вы подарили {coins} монет", reply_markup=my_markup())
+        bot.send_message(chatID, f"{message.from_user.first_name} подарил(а) вам {coins} монет")
+    else:
+        bot.send_message(message.chat.id, 'Я вас не понимаю, скажите нормально "Да" или "Нет"')
+        bot.register_next_step_handler(message, give_coins_s4, chatID, coins, commision)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_diamonds_1"))
 def buy_diamonds_1(call):
     markup = types.InlineKeyboardMarkup()
@@ -983,6 +1041,9 @@ def go_course_lesson(message, courseID):
         if not data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed']:
             data['education'][str(message.chat.id)]['completed_courses']+=1
             data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed'] = True
+            SQL_one_command("UPDATE users SET experience = experience + 3 WHERE chatID = ?", (message.chat.id,), commit=True)
+        else:
+            SQL_one_command("UPDATE users SET experience = experience + 1 WHERE chatID = ?", (message.chat.id,), commit=True)
         data['education'][str(message.chat.id)]['my_courses'][str(courseID)]['completed_lessons'] = len(lessonsData['courses'][str(courseID)]['lessons'])
         i = len(lessonsData['courses'][str(courseID)]['lessons'])
     save_data()
@@ -1069,9 +1130,17 @@ def exam(call):
     else:
         if status == "N":
             ...
-        text += "Не верно\n\n"
+        if step != "0":
+            text += "Не верно\n\n"
+    score = int(score)
     if str(message.chat.id) not in data["examsData"]:
         data["examsData"][str(message.chat.id)] = {"last":{}}
+    if str(step) != "0":
+        if status == "0":
+            u = "Верный"
+        else:
+            u = "Не верный"
+        data["examsData"][str(message.chat.id)]["last"]["questions"][str(step)]["userAnswer"] = u
     if int(step) >= 10:
         markup.add(types.InlineKeyboardButton("Назад", callback_data="education"))
         markup.add(types.InlineKeyboardButton("Характеристика", callback_data=f"exam_statistic:last"))
@@ -1086,17 +1155,26 @@ def exam(call):
             }
         elif subject not in data['education'][str(message.chat.id)]['completed_exams'][userClass]:
             data['education'][str(message.chat.id)]['completed_exams'][userClass][subject] = {}
-        if examID not in data['education'][str(message.chat.id)]['completed_exams']:
+        if examID not in data['education'][str(message.chat.id)]['completed_exams'][userClass][subject]:
             data['education'][str(message.chat.id)]['complet_exams'] += 1
             data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID] = {
                 "count": 1,
                 "answers" : int(step),
                 "correctAnswers": int(score)
             }
+            mistacesAnswers = 10 - score
+            addEx = (5 * score) - (5 * mistacesAnswers)
+            SQL_one_command("UPDATE users SET experience = experience + ? WHERE chatID = ?", (addEx, message.chat.id), commit=True)
         else:
             data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["count"] += 1
             data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["answers"] += int(step)
             data['education'][str(message.chat.id)]['completed_exams'][userClass][subject][examID]["correctAnswers"] += int(score)
+            mistacesAnswers = 10 - score
+            addEx = (0.5 * score) - (0.5 * mistacesAnswers)
+            if addEx < 0:
+                addEx -= 0.5
+            addEx = int(addEx)
+            SQL_one_command("UPDATE users SET experience = experience + ? WHERE chatID = ?", (addEx, message.chat.id), commit=True)
         save_data()
         return
     questionGroupId = random.choice(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][examID]["types"][examType])
@@ -1107,22 +1185,22 @@ def exam(call):
     if str(step) == "0":
         data["examsData"][str(message.chat.id)]["last"] = {
             "examID": examID,
-            "questions":{},
+            "questions":{"1":{
+                "questionLevel": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"],
+                "question": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"],
+                "answer": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0]
+            }},
             "class": userClass,
             "subject": subject,
             "startTime": int(datetime.now().timestamp()),
             "endTime" : None
         }
     else:
-        if status == "0":
-            u = "Верный"
-        else:
-            u = "Не верный"
-        data["examsData"][str(message.chat.id)]["last"]["questions"][str(step)] = {
+        data["examsData"][str(message.chat.id)]["last"]["questions"][str(int(step) + 1)] = {
             "questionLevel": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"],
             "question": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"],
             "answer": lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["answers"][0],
-            "userAnswer": u
+            "userAnswer": None
         }
     save_data()
     text += f'Уровень: <b>{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["level"]}</b>\n\n{lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["question"]}'
@@ -1381,6 +1459,7 @@ def start_lesson(message, lessonID, index):
         else:
             data['education'][str(message.chat.id)]['completed_lesson']+=1
             data['education'][str(message.chat.id)]['complet_lessons'][str(lessonID)]=1
+            SQL_one_command("UPDATE users SET experience = experience + 1 WHERE chatID = ?", (message.chat.id,), commit=True)
         save_data()
         if lessonsData["lessons"][lessonID]["test"] is not None:
             btn = types.InlineKeyboardButton("Пройти тест", callback_data=f'test:{lessonsData["lessons"][lessonID]["test"]}:1:0:False')
@@ -1407,6 +1486,12 @@ def start_test(message, testID, index, score, true=False):
         info = f"Результат теста\nВопросов: {index-1}\nПравильных ответов: {score}"
         if str(testID) in data['education'][str(message.chat.id)]['complet_tests']:
             data['education'][str(message.chat.id)]['complet_tests'][str(testID)]+=1
+            mistacesAnswers = index - 1 - score
+            addEx = (0.5 * score) - (2 * mistacesAnswers)
+            if addEx < 0:
+                addEx -= 0.5
+            addEx = int(addEx)
+            SQL_one_command("UPDATE users SET experience = experience + ? WHERE chatID = ?", (addEx, message.chat.id), commit=True)
         else:
             data['education'][str(message.chat.id)]['completed_tests']+=1
             i = 10/(index-1)*score
@@ -1414,6 +1499,9 @@ def start_test(message, testID, index, score, true=False):
             if data['education'][str(message.chat.id)]["completed_tests"] == 1: t = i
             data['education'][str(message.chat.id)]['GPA'] = round((i+t)/2, 2)
             data['education'][str(message.chat.id)]['complet_tests'][str(testID)]=1
+            mistacesAnswers = index - 1 - score
+            addEx = (2 * score) - (3 * mistacesAnswers)
+            SQL_one_command("UPDATE users SET experience = experience + ? WHERE chatID = ?", (addEx, message.chat.id), commit=True)
         data['education'][str(message.chat.id)]['problems_solved'] += index - 1
         data['education'][str(message.chat.id)]['decided_correctly'] += score
         save_data()
@@ -1497,6 +1585,9 @@ def my_room(message):
     if info is None or info[6] == 0:
         bot.send_message(message.chat.id, "Что-то пошло не так, похоже вы не зарегестрировались, пропишите /start")
         return
+    t = my_libs.ExLevel.levelCalculate(message.chat.id)
+    if t:
+        info = SQL_one_command("SELECT * FROM users WHERE chatID = ?", (message.chat.id,), fetchMode="one").data
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Школа", callback_data=f"school_info:{info[5]}")
     markup.add(btn)
@@ -1805,35 +1896,71 @@ def ask_dz_step_1(call):
                 markup.add(btn)
     bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери предмет\n\nЕсли нужного предмета нету, значит дз на него уже задано или его нет в расписании на это число", reply_markup=markup)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz_s2:'))
-def ask_dz_step_1(call):
+def ask_dz_step_2(call):
     message, Odate, sub, schoolID, schoolClass = call.data.split(":")
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Добавить награду", callback_data=f"ask_dz_s2_r:{Odate}:{sub}:{schoolID}:{schoolClass}"))
+    markup.add(types.InlineKeyboardButton("Без награды", callback_data=f"ask_dz_s3:{Odate}:{sub}:{schoolID}:{schoolClass}:N"))
+    bot.send_message(call.message.chat.id, "Чтобы вам ответили быстрее вы можете установить награду тому, кто вам ответит", reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz_s2_r:'))
+def ask_dz_step_2_r(call):
+    message, Odate, sub, schoolID, schoolClass = call.data.split(":")
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("Без награды", callback_data=f"ask_dz_s3:{Odate}:{sub}:{schoolID}:{schoolClass}:N"))
+    bot_message_id = bot.send_message(call.message.chat.id, "Введите количество монет которое вы дадите тому кто ответит на ваш вопрос", reply_markup=markup).message_id
+    bot.register_next_step_handler(call.message, ask_dz_step_2_r_s2, Odate, sub, schoolID, schoolClass, bot_message_id)
+def ask_dz_step_2_r_s2(message, Odate, sub, schoolID, schoolClass, bot_message_id):
+    bot.delete_message(message.chat.id, message.message_id)
+    try:
+        reward = int(message.text)
+    except ValueError:
+        bot.edit_message_text("Вы ввели не число, попробуйте еще раз", message.chat.id, bot_message_id)
+        bot.register_next_step_handler(message, ask_dz_step_2_r_s2, Odate, sub, schoolID, schoolClass, bot_message_id)
+        return
+    coins = SQL_one_command("SELECT coins From users WHERE chatID = ?", (message.chat.id,), fetchMode="one").data[0]
+    if coins < reward:
+        bot.edit_message_text('У вас недостаточно монет, введите число заново или нажмите "Без награды"', message.chat.id, bot_message_id)
+        bot.register_next_step_handler(message, ask_dz_step_2_r_s2, Odate, sub, schoolID, schoolClass, bot_message_id)
+        return
+    markup = types.InlineKeyboardMarkup()
+    btn0 = types.InlineKeyboardButton("Да", callback_data=f"ask_dz_s3:{Odate}:{sub}:{schoolID}:{schoolClass}:{reward}")
+    markup.add(btn0)
+    bot.edit_message_text(f"Вы уверены что хотите подарить {reward} монет тому кто ответит на вопрос?", message.chat.id, bot_message_id, reply_markup=markup)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('ask_dz_s3:'))
+def ask_dz_step_3(call):
+    message, Odate, sub, schoolID, schoolClass, reward = call.data.split(":")
     message = call.message
     bot.send_message(message.chat.id, "Если кто-то из твоих одноклассников ответит, то я тебе сообщу")
     conn =sql_conn()
     cur = conn.cursor()
-    cur.execute("SELECT chatID FROM users WHERE schoolID = ? AND class = ?", (int(schoolID), schoolClass))
+    cur.execute("SELECT chatID FROM users WHERE schoolID = ? AND class = ? AND chatID <> ?", (int(schoolID), schoolClass, message.chat.id))
     users = cur.fetchall()
     cur.close()
     conn.close()
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("Ответить", callback_data=f"repli_dz:{Odate}:{sub}:{message.chat.id}")
+    btn = types.InlineKeyboardButton("Ответить", callback_data=f"repli_dz:{Odate}:{sub}:{message.chat.id}:{reward}")
     markup.add(btn)
+    text = f"Твой одноклассник попросил скинуть ДЗ по предмету {sub} на {Odate}"
+    if reward != "N":
+        text += f"\n\nЗа это вы получите {reward} монет"
+        print(reward, message.chat.id)
+        SQL_one_command("UPDATE users SET coins = coins - ? WHERE chatID = ?", (reward, message.chat.id), commit=True)
     for el in users:
-        bot.send_message(el[0], f"Твой одноклассник попросил скинуть ДЗ по предмету {sub} на {Odate}", reply_markup=markup)
+        bot.send_message(el[0], text, reply_markup=markup)
     bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('repli_dz:'))
 def reply_for_homeTask_ask(call):
-    message, Odate, subject, id = call.data.split(":")
+    message, Odate, subject, id, reward = call.data.split(":")
+    id = int(id)
     message = call.message
     tempData["usersData"][str(message.chat.id)]["tempDate"], tempData["usersData"][str(message.chat.id)]["tempSubject"] = Odate, subject
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,text=f"Впиши дз по {subject} на {Odate}", reply_markup=markup)
-    bot.register_next_step_handler(message, reply_for_homeTask_handler, id)
-def reply_for_homeTask_handler(message, id):
-    add_homeTask_step_3(message)
-    bot.send_message(id, "Дз которое вы просили добавлено")
+    bot.register_next_step_handler(message, reply_for_homeTask_handler, id, int(reward))
+def reply_for_homeTask_handler(message, id, reward):
+    add_homeTask_step_3(message, "askDZ", id, reward)
 def add_homeTask(message, schoolID, school_class):
     today = datetime.today().date()
     todaySPL = str(today).split('-')
@@ -1898,7 +2025,7 @@ def add_homeTask_step_2(message, date, subject):
     tempData["usersData"][str(message.chat.id)]["tempSubject"] = subject
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text=f"Впиши дз по {subject} на {date}", reply_markup=markup)
     bot.register_next_step_handler(message, add_homeTask_step_3)
-def add_homeTask_step_3(message):
+def add_homeTask_step_3(message, dzType = "common", asker = None, reward = 0):
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute('SELECT schoolID FROM users WHERE chatID = ?', (message.chat.id,))
@@ -1928,10 +2055,14 @@ def add_homeTask_step_3(message):
         "dz": message.text,
         "writer": message.chat.id,
         "rating": 1,
-        "answers":[message.chat.id]
+        "answers":[message.chat.id],
+        "type": dzType
     }
+    if dzType == "askDZ":
+        data["schoolsData"][str(schoolID)][my_class]["add_dz"][str(add_dz_id)]["asker"] = asker
+        data["schoolsData"][str(schoolID)][my_class]["add_dz"][str(add_dz_id)]["reward"] = reward
     save_data()
-    if len(students) <= 3:
+    if len(students) <= 4:
         add_homeTask_step_4(schoolID, my_class, add_dz_id)
         return
     markup = types.InlineKeyboardMarkup()
@@ -1963,7 +2094,7 @@ def add_homeTask_step_4(schoolID, my_class, add_dz_id):
     if data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["rating"] < 0:
         conn = sql_conn()
         cur = conn.cursor()
-        cur.execute('UPDATE users SET rating = rating - 2 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
+        cur.execute('UPDATE users SET rating = rating - 3 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
         conn.commit()
         cur.close()
         conn.close()
@@ -1974,9 +2105,13 @@ def add_homeTask_step_4(schoolID, my_class, add_dz_id):
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute('UPDATE users SET rating = rating + 1 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
+    cur.execute('UPDATE users SET coins = coins + 5 WHERE chatID = ?', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"],))
     conn.commit()
     cur.close()
     conn.close()
+    if data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["type"] == "askDZ":
+        SQL_one_command("UPDATE users SET coins = coins + ? WHERE chatID = ?", (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["reward"], data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"]), commit=True)
+        bot.send_message(data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["asker"], "ДЗ которое вы просили добавлено")
     conn = sql.connect(f'./sqls/{schoolID}.sql')
     cur = conn.cursor()
     cur.execute('INSERT INTO dz (date, predmet, dz, class) VALUES (?,?,?,?)', (data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"], data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"], data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["dz"], my_class))
@@ -1984,7 +2119,12 @@ def add_homeTask_step_4(schoolID, my_class, add_dz_id):
     cur.close()
     conn.close()
     bot.send_message(data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["writer"], f'Добавленное вами дз по предмету {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"]} на {data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"]} помечено как правильное, за это вам дают 1 очко рейтинга')
-    del data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]
+    for el in data["schoolsData"][schoolID][my_class]["add_dz"]:
+        if data["schoolsData"][schoolID][my_class]["add_dz"][el]["subject"] == \
+                data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["subject"] and \
+                data["schoolsData"][schoolID][my_class]["add_dz"][el]["date"] == \
+                data["schoolsData"][schoolID][my_class]["add_dz"][add_dz_id]["date"]:
+            del data["schoolsData"][schoolID][my_class]["add_dz"][el]
     save_data()
 def rem_homeTask(message, schoolID, school_class):
     conn = sql.connect(f'./sqls/{schoolID}.sql')

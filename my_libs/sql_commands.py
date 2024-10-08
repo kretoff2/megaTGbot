@@ -10,11 +10,11 @@ class SQL_connection():
         self.cur = self.conn.cursor()
     def sql_command(self, SQL:str, args:tuple):
         self.cur.execute(SQL, args)
-    def SQL_fetchone(self, SQL:str, args:tuple):
+    def SQL_fetchone(self, SQL:str, args:tuple) -> tuple:
         self.sql_command(SQL, args)
         data = self.cur.fetchone()
         return data
-    def SQL_fetchall(self, SQL:str, args:tuple):
+    def SQL_fetchall(self, SQL:str, args:tuple) -> list:
         self.sql_command(SQL, args)
         data = self.cur.fetchall()
         return data
