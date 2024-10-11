@@ -15,10 +15,13 @@ import my_libs.handbook
 import my_libs.ExLevel
 import my_libs.sql_commands
 from my_libs.sql_commands import SQL_connection, SQL_one_command
+from my_libs import GDZ
+
 #from PIL import Image
 #import io
 
 bot = telebot.TeleBot(config.bot)
+GDZ.init(bot)
 
 tempData = {
     "usersData": {
@@ -298,11 +301,13 @@ def main(message):
             bot.send_message(refer_id, f"По вашей ссылке зарегестрировался пользователь @{message.from_user.username}")
         conn.commit()
         cur.execute("SELECT count(*) FROM users WHERE autorizationStep != 0")
-        col = cur.fetchone()[0]
+        colUsers = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM schools")
+        colSchools = cur.fetchone()[0]
         cur.close()
         conn.close()
         bot.send_message(message.chat.id,
-                         f"Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.\n\nУже зарегестрировались {col}")
+                         f"Все данные которые вы предоставляете полностью конфиденциальны и не распространяются не каким образом. Нам нужны данные чтобы мы могли предоставить для вас ваше расписаниеи, д/з и т.п.\n\nУже зарегестрировались {colUsers} человек из {colSchools} школ")
         markup = types.InlineKeyboardMarkup()
         btnBel = types.InlineKeyboardButton("Беларусь", callback_data="first_register_step:Беларусь")
         btnRus = types.InlineKeyboardButton("Россия", callback_data="first_register_step:Россия")
@@ -510,400 +515,16 @@ def gdz(message):
         markup.add(btn)
     bot.send_message(message.chat.id, "Выбери предмет", reply_markup=markup)
 
-#гдз для 8 класса
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:8:'))
-def gdz_s_8(call):
-    subject = call.data.split(":")[2]
-    message = call.message
-    if subject == "Русский язык":
-        bot.send_message(message.chat.id, "Введите номер упражнения")
-        bot.register_next_step_handler(message, gdz_rus_8)
-    elif subject == "Белорусский язык":
-        bot.send_message(message.chat.id, "Введите номер упражнения")
-        bot.register_next_step_handler(message, gdz_bel_8)
-    elif subject == "Биология":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
-        bot.register_next_step_handler(message, gdz_bio_8)
-    elif subject == "География":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
-        bot.register_next_step_handler(message, gdz_geo_8)
-    elif subject == "Геометрия":
-        bot.send_message(message.chat.id, "Введите номер задания")
-        bot.register_next_step_handler(message, gdz_geom_8)
-    elif subject == "Алгебра":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("Повторение 7 класса", callback_data="gdz_alg_8:10")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 1", callback_data="gdz_alg_8:0")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 2", callback_data="gdz_alg_8:2")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 3", callback_data="gdz_alg_8:7")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 4", callback_data="gdz_alg_8:9")
-        markup.add(btn)
-        bot.send_message(message.chat.id, "Выбери главу", reply_markup=markup)
-    elif subject == "Английский":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("Стандартный", callback_data="gdz_0:8-angl-2021")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Повышенный", callback_data="gdz_0:8-angl-profi")
-        markup.add(btn)
-        bot.send_message(message.chat.id, "Выбери уровень", reply_markup=markup)
-    elif subject == "Физика":
-        bot.send_message(message.chat.id, "Введите номер упражнения (от 1 до 26)")
-        bot.register_next_step_handler(message, gdz_fiz_8_0)
-    elif subject == "Химия":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
-        bot.register_next_step_handler(message, gdz_xim_8_0)
-    else: bot.send_message(message.chat.id, "Извините но этот предмет не доступен для вашего класса")
-
-def gdz_fiz_8_0(message):
-    try:
-        upr = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не число, введите число")
-        bot.register_next_step_handler(message, gdz_fiz_8_0)
-        return
-    bot.send_message(message.chat.id, "Введите номер задания")
-    bot.register_next_step_handler(message, gdz_fiz_8, upr)
-def gdz_fiz_8(message, upr):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_fiz_8, upr)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-fizika-2018/{upr-1}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-
-def gdz_xim_8_0(message):
-    try:
-        upr = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не число, введите число")
-        bot.register_next_step_handler(message, gdz_xim_8_0)
-        return
-    bot.send_message(message.chat.id, "Введите номер задания")
-    bot.register_next_step_handler(message, gdz_xim_8, upr)
-def gdz_xim_8(message, upr):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_xim_8, upr)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-him-2018/{upr-1}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_rus_8(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_rus_8)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-russk-2018/0/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_bel_8(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_bel_8)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-bel-2020/1/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_bio_8(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_bio_8)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-biol-2023/par/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_geo_8(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_geo_8)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-geograf/1/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('gdz_0:8-angl-'))
-def gdz_angl_8_0(call):
-    val = call.data.split(":")
-    if val[1] == "8-angl-2021":
-        bot.send_message(call.message.chat.id, "Введите номер страницы")
-        bot.register_next_step_handler(call.message, gdz_angl_8, val[1])
-    elif val[1] == "8-angl-profi":
-        if len(val) == 2:
-            markup = types.InlineKeyboardMarkup()
-            btn = types.InlineKeyboardButton("Часть 1", callback_data="gdz_0:8-angl-profi:chast-1")
-            markup.add(btn)
-            btn = types.InlineKeyboardButton("Часть 2", callback_data="gdz_0:8-angl-profi:chast-2")
-            markup.add(btn)
-            bot.send_message(call.message.chat.id, "Выбери часть", reply_markup=markup)
-        elif len(val) == 3:
-            bot.send_message(call.message.chat.id, "Введите номер страницы")
-            bot.register_next_step_handler(call.message, gdz_angl_8, val[1], val[2])
-def gdz_angl_8(message, book, part = None):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_angl_8, book, part)
-        return
-    try:
-        URL = f'https://resheba.top/GDZ/{book}'
-        if part is not None: URL+=f"/{part}"
-        else: URL+="/str"
-        URL+=f"/{nomer}.png"
-        response = requests.get(URL)
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('gdz_alg_8:'))
-def gdz_alg_8_0(call):
-    val0 = call.data.split(":")[1]
-    bot.send_message(call.message.chat.id, "Введите номер")
-    bot.register_next_step_handler(call.message, gdz_alg_8, val0)
-def gdz_alg_8(message, val0):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_alg_8, val0)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-alg-2018/{val0}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_geom_8(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_alg_8)
-        return
-    if nomer <= 153:
-        val0 = 1
-    elif nomer <= 260:
-        val0 = 3
-    elif nomer <= 350:
-        val0 = 4
-    elif nomer <= 422:
-        val0 = 6
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/8-geom-2018/{val0}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-
-#ГДЗ 7 класс
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:7:'))
-def gdz_s_7(call):
-    subject = call.data.split(":")[2]
-    message = call.message
-    if subject == "Русский язык":
-        bot.send_message(message.chat.id, "Введите номер упражнения")
-        bot.register_next_step_handler(message, gdz_rus_7)
-    elif subject == "Белорусский язык":
-        bot.send_message(message.chat.id, "Введите номер упражнения")
-        bot.register_next_step_handler(message, gdz_bel_7)
-    elif subject == "Геометрия":
-        bot.send_message(message.chat.id, "Введите номер задания")
-        bot.register_next_step_handler(message, gdz_geom_7)
-    elif subject == "Алгебра":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("Глава 1", callback_data="gdz_alg_7:0")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 2", callback_data="gdz_alg_7:1")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 3", callback_data="gdz_alg_7:3")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Глава 4", callback_data="gdz_alg_7:4")
-        markup.add(btn)
-        bot.send_message(message.chat.id, "Выбери главу", reply_markup=markup)
-    elif subject == "Английский":
-        markup = types.InlineKeyboardMarkup()
-        btn = types.InlineKeyboardButton("Стандартный", callback_data="gdz_0:7-angl")
-        markup.add(btn)
-        btn = types.InlineKeyboardButton("Повышенный", callback_data="gdz_0:7-angl-profi")
-        markup.add(btn)
-        bot.send_message(message.chat.id, "Выбери уровень", reply_markup=markup)
-    elif subject == "Физика":
-        bot.send_message(message.chat.id, "Введите номер упражнения (от 1 до 22)")
-        bot.register_next_step_handler(message, gdz_fiz_7_0)
-    elif subject == "Химия":
-        bot.send_message(message.chat.id, "Введите номер параграфа")
-        bot.register_next_step_handler(message, gdz_xim_7_0)
-    else: bot.send_message(message.chat.id, "Извините но этот предмет не доступен для вашего класса")
-def gdz_fiz_7_0(message):
-    try:
-        upr = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не число, введите число")
-        bot.register_next_step_handler(message, gdz_fiz_7_0)
-        return
-    bot.send_message(message.chat.id, "Введите номер задания")
-    bot.register_next_step_handler(message, gdz_fiz_7, upr)
-def gdz_fiz_7(message, upr):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_fiz_7, upr)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-fizika-new/{upr-1}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-
-def gdz_xim_7_0(message):
-    try:
-        upr = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не число, введите число")
-        bot.register_next_step_handler(message, gdz_xim_7_0)
-        return
-    bot.send_message(message.chat.id, "Введите номер задания")
-    bot.register_next_step_handler(message, gdz_xim_7, upr)
-def gdz_xim_7(message, upr):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_xim_7, upr)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-himiya-2017/par-{upr}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_rus_7(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_rus_7)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-rus-2020/1/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_bel_7(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_bel_7)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-bel-2020/1/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('gdz_0:7-angl-'))
-def gdz_angl_8_0(call):
-    val = call.data.split(":")
-    if val[1] == "7-angl":
-        bot.send_message(call.message.chat.id, "Введите номер страницы")
-        bot.register_next_step_handler(call.message, gdz_angl_8, val[1])
-    elif val[1] == "7-angl-profi":
-        if len(val) == 2:
-            markup = types.InlineKeyboardMarkup()
-            btn = types.InlineKeyboardButton("Часть 1", callback_data="gdz_0:7-angl-profi:chast-1")
-            markup.add(btn)
-            btn = types.InlineKeyboardButton("Часть 2", callback_data="gdz_0:7-angl-profi:chast-2")
-            markup.add(btn)
-            bot.send_message(call.message.chat.id, "Выбери часть", reply_markup=markup)
-        elif len(val) == 3:
-            bot.send_message(call.message.chat.id, "Введите номер страницы")
-            bot.register_next_step_handler(call.message, gdz_angl_8, val[1], val[2])
-def gdz_angl_8(message, book, part = None):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_angl_8, book, part)
-        return
-    try:
-        URL = f'https://resheba.top/GDZ/{book}'
-        if part is not None: URL+=f"/{part}"
-        else: URL+="/str"
-        URL+=f"/{nomer}.png"
-        response = requests.get(URL)
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-@bot.callback_query_handler(func=lambda callback: callback.data.startswith('gdz_alg_7:'))
-def gdz_alg_7_0(call):
-    val0 = call.data.split(":")[1]
-    bot.send_message(call.message.chat.id, "Введите номер")
-    bot.register_next_step_handler(call.message, gdz_alg_7, val0)
-def gdz_alg_7(message, val0):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_alg_7, val0)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-alg-2017/{val0}/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
-def gdz_geom_7(message):
-    try:
-        nomer = int(message.text)
-    except ValueError:
-        bot.send_message(message.chat.id, "Вы ввели не номер, введите номер")
-        bot.register_next_step_handler(message, gdz_alg_7)
-        return
-    try:
-        response = requests.get(f'https://resheba.top/GDZ/7-geom-2017-4/nomera/{nomer}.png')
-        bot.send_photo(message.chat.id, response.content)
-    except:
-        bot.send_message(message.chat.id, "Что-то пошло не так, поищите здесь https://resheba.top")
-        return
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:'))
+def main(call):
+    if data["usersData"][str(call.message.chat.id)]["contry"] == "Беларусь":
+        gos = "RB"
+    elif data["usersData"][str(call.message.chat.id)]["contry"] == "Россия":
+        gos = "RF"
+    GDZ.route_gdz_s(call)
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('gdz_0:'))
+def main(call):
+    GDZ.route_gdz_0(call)
 
 def go_education(message):
     conn = sql_conn()
@@ -2232,7 +1853,10 @@ def about_bot(call):
     markup.add(btn)
     btn = types.InlineKeyboardButton("Справочник", callback_data="handbook")
     #markup.add(btn)
-    bot.send_message(call.message.chat.id, config.bot_info, reply_markup=markup, parse_mode="HTML")
+    usersCol = SQL_one_command("SELECT count(*) FROM users WHERE autorizationStep != 0", fetchMode="one").data[0]
+    schoolsCol = SQL_one_command("SELECT count(*) FROM schools", fetchMode="one").data[0]
+    usersInfo = f"\nВсего зарегестрировано {usersCol} пользователей из {schoolsCol} школ"
+    bot.send_message(call.message.chat.id, config.bot_info + usersInfo, reply_markup=markup, parse_mode="HTML")
 @bot.callback_query_handler(func=lambda callback: callback.data == "handbook")
 def about_bot(call):
     markup = types.InlineKeyboardMarkup()
