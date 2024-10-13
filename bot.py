@@ -1,3 +1,4 @@
+import gigachat
 import telebot
 from telebot import types
 import sqlite3 as sql
@@ -16,6 +17,7 @@ import my_libs.ExLevel
 import my_libs.sql_commands
 from my_libs.sql_commands import SQL_connection, SQL_one_command
 from my_libs import GDZ
+from gigachat import ask_question
 
 #from PIL import Image
 #import io
@@ -80,17 +82,7 @@ with open('data.json', 'r', encoding='utf-8') as f:
 with open('lessons.json', 'r', encoding='utf-8') as f:
     lessonsData = json.load(f)
 def my_markup():
-    markup = types.ReplyKeyboardMarkup()
-    btn1 = types.KeyboardButton("Личный кабинет 🪪")
-    btn2 = types.KeyboardButton("Настройки ⚙️")
-    markup.row(btn1, btn2)
-    btn = types.KeyboardButton("Обучение 📖")
-    markup.add(btn)
-    btn = types.KeyboardButton("Школа 🏫")
-    markup.add(btn)
-    #btn = types.KeyboardButton("Школа kretoffer'a 💻")
-    btn = types.KeyboardButton("Магазин 🛍️")
-    markup.add(btn)
+    markup = my_markup_m
     return markup
 @bot.message_handler(commands=['class'])
 def main(message):
@@ -393,6 +385,8 @@ def openShop(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Алмазы за монеты", callback_data="buy_diamonds_1")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Монеты за алмазы", callback_data="buy_coins_1")
+    markup.add(btn)
     btn = types.InlineKeyboardButton("Подарить монеты", callback_data="give_coins")
     markup.add(btn)
     bot.send_message(message.chat.id, f"<b>Баланс:</b>\nМонеты:{user[10]}\nАлмазы:{user[11]}\n\n<b>Магазин:</b>", reply_markup=markup, parse_mode='HTML')
@@ -458,7 +452,25 @@ def buy_diamonds_1(call):
     btn3 = types.InlineKeyboardButton("100", callback_data="buy:diamonds:100")
     markup.row(btn1, btn2, btn3)
     bot.send_message(call.message.chat.id, "1 алмаз стоит 100 монет, выберите количество алмазов", reply_markup=markup)
-
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy_coins_1"))
+def buy_coins_1(call):
+    bot_message_id = bot.send_message(call.message.chat.id, "75 монет стоят 1 алмаз, впишите количество алмазов которые вы хотите обменять").message_id
+    bot.register_next_step_handler(call.message, buy_coins_2, bot_message_id)
+def buy_coins_2(message, bot_message_id):
+    bot.delete_message(message.chat.id, message.message_id)
+    bot.delete_message(message.chat.id, bot_message_id)
+    try:
+        diamonds = int(message.text)
+    except ValueError:
+        bot.send_message(message.chat.id, "Вы ввели не число, попробуйте еще раз")
+        bot.register_next_step_handler(message, buy_coins_2, bot_message_id)
+        return
+    userDiamonds = SQL_one_command("SELECT diamonds FROM users WHERE chatID = ?", (message.chat.id,), fetchMode="one").data[0]
+    if userDiamonds < diamonds:
+        bot.send_message(message.chat.id, "У вас нет столько алмазов")
+        return
+    SQL_one_command("UPDATE users SET diamonds = diamonds - ?, coins = coins + ? WHERE chatID = ?", (diamonds, diamonds*75, message.chat.id), commit=True)
+    bot.send_message(message.chat.id, "Успешно")
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith("buy:diamonds:"))
 def buy_diamonds(call):
     bot.delete_message(call.message.chat.id, call.message.message_id)
@@ -1809,6 +1821,44 @@ def create_new_scholl_db(schoolID):
 def kretoffSchool(message):
     markup = types.InlineKeyboardMarkup()
     bot.send_message(message.chat.id, "В разработке", reply_markup=markup)
+
+def kretoff_gpt(message):
+    bot.send_message(message.chat.id, "Привет я kretofferGPT, могу помочь тебе с разного рода задачами.\nМой хозяин мне не платит, по этому платить мне будешь ты🫵\n"
+                     "\n<b>micro</b> - очень легкие вопросы с очень кратким ответом\n"
+                     "<b>mini</b> - более продвинутая версия\n"
+                     "<b>lite</b> - версия которая может помочь с более сложными задачами\n"
+                     "<b>standart</b> - стандартная версия которая подойдет для простеньких вопросов с объяснением <i>рекомендуется</i>\n"
+                     "<b>bigModel</b> - подходит для развернутых ответов на сложные вопросы, написания текстов\n"
+                     "<b>kretofferGPT pro</b> - супер умная версия бота которая может сделать что угодно (краткий ответ)\n"
+                     "<b>kretofferGPT pro+</b> - развернутый ответ", reply_markup=kretofferGPT_variants_markup, parse_mode="HTML")
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('GPT_v:'))
+def gpt_v(call):
+    version = call.data.split(":")[1]
+
+    versionsPrice = {"micro": 10, "mini": 20, "lite": 45, "standart": 100, "bigModel": 200}
+    versionsProPrice = {"kretofferGPT_pro": 500, "kretofferGPT_pro_p": 1000}
+
+    if version in versionsPrice:
+        price = versionsPrice[version]
+    elif version in versionsProPrice:
+        price = versionsProPrice[version]
+    userCoins = SQL_one_command("SELECT coins FROM users WHERE chatID = ?", (call.message.chat.id,), fetchMode="one").data[0]
+    if userCoins < price:
+        bot.send_message(call.message.chat.id, "Недостаточно монет")
+        return
+    bot.send_message(call.message.chat.id, "Напишите вопрос")
+    bot.register_next_step_handler(call.message, ask_gpt_question, version, price)
+def ask_gpt_question(message, version = "micro", price = 50):
+    SQL_one_command("UPDATE users SET coins = coins - ? WHERE chatID = ?", (price, message.chat.id), commit=True)
+
+    versions = {"micro": 50, "mini": 150, "lite": 250, "standart": 500, "bigModel": 1000}
+    versionsPro = {"kretofferGPT_pro": 500, "kretofferGPT_pro_p": 1000}
+
+    if version in versions:
+        answer = ask_question(message.text, versions[version], "GigaChat")
+    elif version in versionsPro:
+        answer = ask_question(message.text, versionsPro[version], "GigaChat-Pro")
+    bot.send_message(message.chat.id, answer, parse_mode="HTML")
 @bot.message_handler()
 def main(message):
     conn = sql_conn()
@@ -1828,10 +1878,18 @@ def main(message):
         go_education(message)
     elif message.text == "Школа 🏫":
         school_info(message)
+    elif message.text == "Другое":
+        bot_message = bot.send_message(message.chat.id, "Вот меню", reply_markup=other_markup)
+        bot.delete_message(message.chat.id, bot_message.message_id, timeout=100)
     elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
     elif message.text == "Магазин 🛍️":
         openShop(message)
+    elif message.text == "kretofferGPT 🤖":
+        kretoff_gpt(message)
+    elif message.text == "⬅️ Назад":
+        bot_message = bot.send_message(message.chat.id, "Вы дома 🏠", reply_markup=my_markup())
+        bot.delete_message(message.chat.id, bot_message.id, timeout=100)
     elif message.text.lower() == "але":
         bot.send_message(message.chat.id, "Абонент временно не доступен перезвоните позже")
     else:
