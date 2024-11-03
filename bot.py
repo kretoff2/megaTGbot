@@ -219,20 +219,21 @@ def main(message):
   bot.register_next_step_handler(message, allMesage)
 
 def allMesage(message):
-  if message.text.strip().lower() == "отмена":
+  if message.content_type == "text" and message.text.strip().lower() == "отмена":
     bot.send_message(message.chat.id, "отмена прошла успешно")
     return
   conn = sql_conn()
   cur = conn.cursor()
 
-  cur.execute('SELECT * FROM users')
+  cur.execute('SELECT chatID FROM users')
   users = cur.fetchall()
 
   cur.close()
   conn.close()
 
   for el in users:
-    bot.send_message(el[3], f'Рассылка:\n{message.text}', reply_markup=my_markup())
+    bot.forward_message(el[0], message.chat.id, message.message_id, disable_notification=True)
+  bot.send_message(message.chat.id, "Все готово", reply_markup=my_markup())
 @bot.message_handler(commands=['friends', 'друзья'])
 def main(message):
     conn = sql_conn()
@@ -516,6 +517,10 @@ def gdz(message):
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
+    btn = types.InlineKeyboardButton("Попросить ответ у одноклассников", callback_data="help_classmates")
+    markup.add(btn)
+    btn = types.InlineKeyboardButton("Спросить у всех", callback_data="help_classmates")
+    markup.add(btn)
     conn = sql_conn()
     cur = conn.cursor()
     cur.execute("SELECT class FROM users WHERE chatID = ?", (message.chat.id,))
@@ -529,6 +534,10 @@ def gdz(message):
 
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('GDZ_s:'))
 def main(call):
+    print(call.message.chat.id)
+    if "contry" not in data["usersData"][str(call.message.chat.id)]:
+        bot.send_message(call.message.chat.id, "Что-то не так с вашим регионом, извините за неудобства")
+        bot.send_message(config.ADMIN_ID, f"ЭТО СНОВА ПРОИЗОШЛО (строка 540, {call.message.chat.id})")
     if data["usersData"][str(call.message.chat.id)]["contry"] == "Беларусь":
         gos = "RB"
     elif data["usersData"][str(call.message.chat.id)]["contry"] == "Россия":
@@ -750,7 +759,7 @@ def exam_statistic(call):
                     f"Правильный ответ: {data['examsData'][str(call.message.chat.id)]['last']['questions'][el]['answer']}\n" \
                     f"Ответ пользователя: {data['examsData'][str(call.message.chat.id)]['last']['questions'][el]['userAnswer']}\n\n"
     bot.send_message(call.message.chat.id, info)
-    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id, timeout=5)
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
 @bot.callback_query_handler(func=lambda callback: callback.data.startswith('exam:'))
 def exam(call):
     message, userClass, subject, examID, examType, step, score, status = call.data.split(":")
@@ -1591,7 +1600,11 @@ def reply_for_homeTask_ask(call):
     btn = types.InlineKeyboardButton("Назад", callback_data="school_infoo")
     markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id,text=f"Впиши дз по {subject} на {Odate}", reply_markup=markup)
-    bot.register_next_step_handler(message, reply_for_homeTask_handler, id, int(reward))
+    try:
+        reward = int(reward)
+    except ValueError:
+        reward = 0
+    bot.register_next_step_handler(message, reply_for_homeTask_handler, id, reward)
 def reply_for_homeTask_handler(message, id, reward):
     add_homeTask_step_3(message, "askDZ", id, reward)
 def add_homeTask(message, schoolID, school_class):
@@ -1880,7 +1893,6 @@ def main(message):
         school_info(message)
     elif message.text == "Другое":
         bot_message = bot.send_message(message.chat.id, "Вот меню", reply_markup=other_markup)
-        bot.delete_message(message.chat.id, bot_message.message_id, timeout=100)
     elif message.text == "Школа kretoffer'a 💻":
         kretoffSchool(message)
     elif message.text == "Магазин 🛍️":
@@ -1889,7 +1901,6 @@ def main(message):
         kretoff_gpt(message)
     elif message.text == "⬅️ Назад":
         bot_message = bot.send_message(message.chat.id, "Вы дома 🏠", reply_markup=my_markup())
-        bot.delete_message(message.chat.id, bot_message.id, timeout=100)
     elif message.text.lower() == "але":
         bot.send_message(message.chat.id, "Абонент временно не доступен перезвоните позже")
     else:
@@ -2067,7 +2078,7 @@ def callback(call):
         timeOut = int(cur.fetchone()[0])
         cur.close()
         conn.close()
-        if timeOut+2592000 > datetime.now().timestamp():
+        if timeOut+2592000 > datetime.now().timestamp() and call.message.chat.id != config.ADMIN_ID:
             bot.send_message(call.message.chat.id, f"Вы сможете изменить класс только через {int((timeOut+2592000-datetime.now().timestamp())/86400)} дней")
             return
         markup = types.InlineKeyboardMarkup()
@@ -2097,7 +2108,77 @@ def callback(call):
         btn2 = types.InlineKeyboardButton('"З"', callback_data="set_class_letter:З")
         btn3 = types.InlineKeyboardButton('"И"', callback_data="set_class_letter:И")
         markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('<', callback_data="set_class_l4")
+        btn2 = types.InlineKeyboardButton('>', callback_data="set_class_l2")
+        markup.add(btn1, btn2)
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Выбери класс", reply_markup=markup)
+    elif callRazd[0] == "set_class_l1":
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('"А"', callback_data="set_class_letter:А")
+        btn2 = types.InlineKeyboardButton('"Б"', callback_data="set_class_letter:Б")
+        btn3 = types.InlineKeyboardButton('"В"', callback_data="set_class_letter:В")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Г"', callback_data="set_class_letter:Г")
+        btn2 = types.InlineKeyboardButton('"Д"', callback_data="set_class_letter:Д")
+        btn3 = types.InlineKeyboardButton('"Е"', callback_data="set_class_letter:Е")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Ж"', callback_data="set_class_letter:Ж")
+        btn2 = types.InlineKeyboardButton('"З"', callback_data="set_class_letter:З")
+        btn3 = types.InlineKeyboardButton('"И"', callback_data="set_class_letter:И")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('<', callback_data="set_class_l4")
+        btn2 = types.InlineKeyboardButton('>', callback_data="set_class_l2")
+        markup.add(btn1, btn2)
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+    elif callRazd[0] == "set_class_l2":
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('"Й"', callback_data="set_class_letter:Й")
+        btn2 = types.InlineKeyboardButton('"К"', callback_data="set_class_letter:К")
+        btn3 = types.InlineKeyboardButton('"Л"', callback_data="set_class_letter:Л")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"М"', callback_data="set_class_letter:М")
+        btn2 = types.InlineKeyboardButton('"Н"', callback_data="set_class_letter:Н")
+        btn3 = types.InlineKeyboardButton('"О"', callback_data="set_class_letter:О")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"П"', callback_data="set_class_letter:П")
+        btn2 = types.InlineKeyboardButton('"Р"', callback_data="set_class_letter:Р")
+        btn3 = types.InlineKeyboardButton('"С"', callback_data="set_class_letter:С")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('<', callback_data="set_class_l1")
+        btn2 = types.InlineKeyboardButton('>', callback_data="set_class_l3")
+        markup.add(btn1, btn2)
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+    elif callRazd[0] == "set_class_l3":
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('"Т"', callback_data="set_class_letter:Т")
+        btn2 = types.InlineKeyboardButton('"У"', callback_data="set_class_letter:У")
+        btn3 = types.InlineKeyboardButton('"Ф"', callback_data="set_class_letter:Ф")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Х"', callback_data="set_class_letter:Х")
+        btn2 = types.InlineKeyboardButton('"Ц"', callback_data="set_class_letter:Ц")
+        btn3 = types.InlineKeyboardButton('"Ч"', callback_data="set_class_letter:Ч")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('"Ш"', callback_data="set_class_letter:Ш")
+        btn2 = types.InlineKeyboardButton('"Щ"', callback_data="set_class_letter:Щ")
+        btn3 = types.InlineKeyboardButton('"Ъ"', callback_data="set_class_letter:Ъ")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('<', callback_data="set_class_l2")
+        btn2 = types.InlineKeyboardButton('>', callback_data="set_class_l4")
+        markup.add(btn1, btn2)
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
+    elif callRazd[0] == "set_class_l4":
+        markup = types.InlineKeyboardMarkup()
+        btn1 = types.InlineKeyboardButton('"Ы"', callback_data="set_class_letter:Ы")
+        btn2 = types.InlineKeyboardButton('"Ь"', callback_data="set_class_letter:Ь")
+        markup.add(btn1, btn2)
+        btn1 = types.InlineKeyboardButton('"Э"', callback_data="set_class_letter:Э")
+        btn2 = types.InlineKeyboardButton('"Ю"', callback_data="set_class_letter:Ю")
+        btn3 = types.InlineKeyboardButton('"Я"', callback_data="set_class_letter:Я")
+        markup.add(btn1, btn2, btn3)
+        btn1 = types.InlineKeyboardButton('<', callback_data="set_class_l3")
+        btn2 = types.InlineKeyboardButton('>', callback_data="set_class_l1")
+        markup.add(btn1, btn2)
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=markup)
     elif callRazd[0] == "set_class_letter":
         conn = sql_conn()
         cur = conn.cursor()
