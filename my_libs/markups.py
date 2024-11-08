@@ -1,5 +1,7 @@
 from telebot import types
 
+classes = [5, 6, 7, 8, 9, 10, 11]
+
 my_markup_m = types.ReplyKeyboardMarkup()
 btn1 = types.KeyboardButton("Личный кабинет 🪪")
 btn2 = types.KeyboardButton("Настройки ⚙️")
@@ -56,3 +58,25 @@ class report_repli_markup(types.InlineKeyboardMarkup):
         self.add(types.InlineKeyboardButton("Ответить", callback_data=f"reply_report:{userID}"))
         self.add(types.InlineKeyboardButton("Снять кулдаун", callback_data=f"good_report:{userID}"))
         self.add(types.InlineKeyboardButton("Спам", callback_data=f"bad_report:{userID}"))
+
+add_admin_markup = types.InlineKeyboardMarkup()
+add_admin_markup.add(types.InlineKeyboardButton("Урок", callback_data="adm_add:l"))
+add_admin_markup.add(types.InlineKeyboardButton("Тест", callback_data="adm_add:t"))
+add_admin_markup.add(types.InlineKeyboardButton("Шпаргалка", callback_data="adm_add:cs"))
+add_admin_markup.add(types.InlineKeyboardButton("Экзамен", callback_data="adm_add:e"))
+
+class classes_markup(types.InlineKeyboardMarkup):
+    def __init__(self, data, classes = classes):
+        super().__init__()
+        for el in classes:
+            self.add(types.InlineKeyboardButton(str(el), callback_data=f"{data}:{el}"))
+class dictToMarkupI(types.InlineKeyboardMarkup):
+    def __init__(self, data,  dict: dict = {"1": "hello"}):
+        super().__init__()
+        for el in dict:
+            self.add(types.InlineKeyboardButton(dict[el], callback_data=f"{data}:{el}"))
+class listToMarkupI(types.InlineKeyboardMarkup):
+    def __init__(self, data,  list: list = []):
+        super().__init__()
+        for el in list:
+            self.add(types.InlineKeyboardButton(el, callback_data=f"{data}:{el}"))

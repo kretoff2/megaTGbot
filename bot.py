@@ -18,6 +18,7 @@ import my_libs.sql_commands
 from my_libs.sql_commands import SQL_connection, SQL_one_command
 from my_libs import GDZ
 from gigachat import ask_question
+from my_libs.markups.adm_markups import *
 
 #from PIL import Image
 #import io
@@ -81,9 +82,344 @@ with open('data.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 with open('lessons.json', 'r', encoding='utf-8') as f:
     lessonsData = json.load(f)
+def getLessonsData():
+    with open('lessons.json', 'r', encoding='utf-8') as f:
+        lessonsData = json.load(f)
+    return lessonsData
+def save_lessonsData(lessonsData = lessonsData):
+    with open('lessons.json', 'w') as f:
+        json.dump(lessonsData, f)
+
 def my_markup():
     markup = my_markup_m
     return markup
+
+def format_message_text(message:telebot.types.Message):
+    text = message.text
+    entities = message.entities
+
+    if entities is None:
+        return text
+
+    entities = sorted(entities, key=lambda e: e.offset)
+    html_text = ""
+    last_offset = 0
+
+    tag_map = {
+        'bold': 'b',
+        'italic': 'i',
+        'underline': 'u',
+        'strikethrough': 's',
+        'code': 'code',
+        'pre': 'pre',
+        'text_link': 'a',
+        'blockquote': 'blockquote',
+        'spoiler': 'tg-spoiler'
+    }
+
+    open_tags = []
+
+    ent = 0
+    for entity in entities:
+        start = entity.offset
+        end = start + entity.length
+
+        # Добавляем текст до текущей entity
+        html_text += text[last_offset:start]
+
+        # Закрываем все открытые теги, если нужно
+        while open_tags and open_tags[-1][0] <= start:
+            tag = open_tags.pop()[1]
+            if tag != "\n":
+                html_text += f'</{tag}>'
+            else:
+                html_text += "\n"
+
+        # Открываем новый тег
+        if entity.type in tag_map:
+            tag = tag_map[entity.type]
+            if entity.type == 'text_link':
+                html_text += f'<{tag} href="{entity.url}">'
+            else:
+                html_text += f'<{tag}>'
+            open_tags.append((end, tag))
+
+        # Добавляем текст текущей entity
+        if ent+1 >= len(entities) or entities[ent+1].offset >= end:
+            html_text += text[start:end]
+        last_offset = end
+        ent += 1
+
+    # Добавляем оставшийся текст
+    html_text += text[last_offset:]
+
+    # Закрываем все оставшиеся теги
+    while open_tags:
+        tag = open_tags.pop()[1]
+        html_text += f'</{tag}>'
+
+    return html_text
+
+
+#admin bot
+
+@bot.message_handler(commands=['info', 'messageInfo'])
+def main(message):
+    if message.chat.id != config.ADMIN_ID:
+        return
+    bot.send_message(message.chat.id, str(message)[:int(len(str(message))/2)])
+    bot.send_message(message.chat.id, str(message)[int(len(str(message))/2):])
+@bot.message_handler(commands=['repiat', 'repiatIt'])
+def main(message):
+    bot.send_message(message.chat.id, message.text)
+@bot.message_handler(commands=['getHTML'])
+def main(message):
+    text = format_message_text(message)
+    text = text[8:len(text)]
+    bot.send_message(message.chat.id, text)
+    bot.send_message(message.chat.id, text, parse_mode='HTML')
+
+@bot.message_handler(commands=['new', 'add'])
+def main(message):
+    name = SQL_one_command('SELECT name FROM admins WHERE chatID = ?', (message.chat.id,), fetchMode='one').data
+    if name is None:
+        bot.send_message(message.chat.id, "Недостаточно прав")
+        return
+    bot.send_message(message.chat.id, f"Что вы хотите добавить, {name[0]}?", reply_markup=add_admin_markup)
+
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add:'))
+def main(call):
+    type = call.data.split(":")[1]
+    bot.send_message(call.message.chat.id, "Выбери класс", reply_markup=classes_markup(f"adm_add2:{type}"))
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add2:'))
+def main(call):
+    type, userClass = tuple(call.data.split(":")[1:3])
+    markup = dictToMarkupI(f"adm_add3:{type}:{userClass}", lessonsData["subjects"])
+    bot.send_message(call.message.chat.id, "Выберите предмет", reply_markup=markup)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add3:l'))
+def main(call):
+    type, userClass, subject = call.data.split(":")[1:4]
+    markup = types.ReplyKeyboardMarkup()
+    for key, value in lessonsData["lessons"]["themes"][f"{userClass}classThemes"].items():
+        if value["subject"] == subject:
+            markup.add(types.KeyboardButton(key[:64]))
+    bot.send_message(call.message.chat.id, "Выберите тему", reply_markup=markup)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.register_next_step_handler(call.message, adm_add4L, type, userClass, subject)
+
+def adm_add4L(message, type, userClass, subject):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название темы должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add4L, type, userClass, subject)
+        return
+    if message.text in lessonsData["lessons"]["themes"][f"{userClass}classThemes"] and lessonsData["lessons"]["themes"][f"{userClass}classThemes"][message.text]["subject"] != subject:
+        bot.send_message(message.chat.id, "Тема с таким названием уже есть в другом предмете, выберите другую")
+        bot.register_next_step_handler(message, adm_add4T, type, userClass, subject)
+        return
+    bot.send_message(message.chat.id, "Впишите название урока")
+    bot.register_next_step_handler(message, adm_add5L, type, int(userClass), subject, message.text)
+def adm_add5L(message, type, userClass, subject, theme):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название урока должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add5L, type, userClass, subject, theme)
+        return
+    if message.text in lessonsData["lessons"]["themes"][f"{userClass}classThemes"]:
+        bot.send_message(message.chat.id, "Урок с таким названием уже есть, выберите другое")
+        bot.register_next_step_handler(message, adm_add5L, type, userClass, subject, theme)
+        return
+    index = len(lessonsData["lessons"])
+    name = message.text
+    if theme in lessonsData["lessons"]["themes"][f"{userClass}classThemes"]:
+        lessonsData["lessons"]["themes"][f"{userClass}classThemes"][theme]["list"].append(str(index))
+    else:
+        themeID = len(lessonsData["lessons"]["themes"][f"{userClass}classThemes"]) + 1
+        lessonsData["lessons"]["themes"][f"{userClass}classThemes"][theme] = {"subject": subject, "list": [str(index)], "id": themeID}
+
+    lessonsData["lessons"][str(index)] = {
+      "name": name,
+      "subtitle": " ",
+      "class": userClass,
+      "subject": subject,
+      "theme": theme,
+      "text": {},
+      "media":{},
+      "test": None,
+      "videoLesson": None
+    }
+    save_lessonsData()
+    bot.send_message(message.chat.id, "Урок успешно создан, можете начать его редактировать с помощью /edit", reply_markup=my_markup())
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add3:t'))
+def main(call):
+    type, userClass, subject = call.data.split(":")[1:4]
+    markup = types.ReplyKeyboardMarkup()
+    for key, value in lessonsData["tests"]["themes"][f"{userClass}classThemes"].items():
+        if value["subject"] == subject:
+            markup.add(types.KeyboardButton(key[:64]))
+    bot.send_message(call.message.chat.id, "Выберите тему", reply_markup=markup)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.register_next_step_handler(call.message, adm_add4T, type, userClass, subject)
+
+def adm_add4T(message, type, userClass, subject):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название темы должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add4T, type, userClass, subject)
+        return
+    if message.text in lessonsData["tests"]["themes"][f"{userClass}classThemes"] and lessonsData["tests"]["themes"][f"{userClass}classThemes"][message.text]["subject"] != subject:
+        bot.send_message(message.chat.id, "Тема с таким названием уже есть в другом предмете, выберите другую")
+        bot.register_next_step_handler(message, adm_add4T, type, userClass, subject)
+        return
+    bot.send_message(message.chat.id, "Впишите название теста")
+    bot.register_next_step_handler(message, adm_add5T, type, int(userClass), subject, message.text)
+def adm_add5T(message, type, userClass, subject, theme):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название теста должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add5T, type, userClass, subject, theme)
+        return
+    if message.text in lessonsData["tests"]["themes"][f"{userClass}classThemes"]:
+        bot.send_message(message.chat.id, "Тест с таким названием уже есть, выберите другое")
+        bot.register_next_step_handler(message, adm_add5T, type, userClass, subject, theme)
+        return
+    index = len(lessonsData["tests"])
+    name = message.text
+    if theme in lessonsData["tests"]["themes"][f"{userClass}classThemes"]:
+        lessonsData["tests"]["themes"][f"{userClass}classThemes"][theme]["list"].append(str(index))
+    else:
+        themeID = len(lessonsData["tests"]["themes"][f"{userClass}classThemes"]) + 1
+        lessonsData["tests"]["themes"][f"{userClass}classThemes"][theme] = {"subject": subject, "list": [str(index)], "id": themeID}
+
+    lessonsData["tests"][str(index)] = {
+      "name": name,
+      "subtitle": " ",
+      "subject": subject,
+      "class": userClass,
+      "theme": theme,
+      "questions": {}
+    }
+    save_lessonsData()
+    bot.send_message(message.chat.id, "Тест успешно создан, можете начать его редактировать с помощью /edit", reply_markup=my_markup())
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add3:cs'))
+def main(call):
+    type, userClass, subject = call.data.split(":")[1:4]
+    markup = types.ReplyKeyboardMarkup()
+    for key, value in lessonsData["cheat_sheets"][f"{userClass}class"].items():
+        if value["subject"] == subject:
+            markup.add(types.KeyboardButton(key[:64]))
+    bot.send_message(call.message.chat.id, "Выберите тему", reply_markup=markup)
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.register_next_step_handler(call.message, adm_add4CS, type, userClass, subject)
+
+def adm_add4CS(message, type, userClass, subject):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название темы должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add4CS, type, userClass, subject)
+        return
+    bot.send_message(message.chat.id, "Впишите название шпаргалки")
+    bot.register_next_step_handler(message, adm_add5CS, type, int(userClass), subject, message.text)
+def adm_add5CS(message, type, userClass, subject, theme):
+    if len(message.text) > 64:
+        markup = types.ReplyKeyboardMarkup()
+        markup.add(types.KeyboardButton(message.text[:61]+"..."))
+        bot.send_message(message.chat.id, "Название шпаргалки должно включать не более 64 символов. Можешь назвать тему так:")
+        bot.register_next_step_handler(message, adm_add5CS, type, userClass, subject, theme)
+        return
+    if theme not in lessonsData["cheat_sheets"][f"{userClass}class"]:
+        lessonsData["cheat_sheets"][f"{userClass}class"][theme] = {"subject":subject, "id":len(lessonsData["cheat_sheets"][f"{userClass}class"])+1}
+    for el in lessonsData["cheat_sheets"][f"{userClass}class"][theme]:
+        if el not in ["subject", "id"] and lessonsData["cheat_sheets"][f"{userClass}class"][theme][el]["name"] == message.text:
+            bot.send_message(message.chat.id, "Тест с таким названием уже есть, выберите другое")
+            bot.register_next_step_handler(message, adm_add5CS, type, userClass, subject, theme)
+            return
+    index = len(lessonsData["cheat_sheets"][f"{userClass}class"][theme])-1
+    name = message.text
+
+    save_lessonsData()
+    bot.send_message(message.chat.id, "Введите шпаргалку")
+    bot.register_next_step_handler(message, adm_add6CS, userClass, theme, index, name)
+
+def adm_add6CS(message, userClass, theme, index, name):
+    lessonsData["cheat_sheets"][f"{userClass}class"][theme][str(index)] = {
+        "name": name,
+        "text": format_message_text(message),
+        "lesson": None
+    }
+    save_lessonsData()
+    bot.send_message(message.chat.id, "Шпаргалка добавлена успешно", reply_markup=my_markup())
+
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith('adm_add3:e'))
+def main(call):
+    type, userClass, subject = call.data.split(":")[1:4]
+    bot.send_message(call.message.chat.id, "Впишите название экзамена")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.register_next_step_handler(call.message, adm_add4E, type, userClass, subject)
+
+def adm_add4E(message, type, userClass, subject):
+    dictionary = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"]
+    if any(item.get("name") == message.text for item in dictionary.values()):
+        bot.send_message(message.chat.id, "Экзамен с таким названием уже есть, хотите его редактировать? /edit exam")
+        return
+    dictionary[len(dictionary)+1] = {
+              "name": message.text,
+              "subtitle": " ",
+              "types": {}
+            }
+
+
+@bot.message_handler(commands=['edit'])
+def main(message):
+    bot.send_message(message.chat.id, "С чем вы хотите работать?", reply_markup=dictToMarkupI("adm_edit", {"l":"Уроки", "t":"Тесты", "cs":"Шпаргалки", "e":"Экзамены"}))
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adm_edit:"))
+def main(call):
+    type = call.data.split(":")[1]
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, "Выберите класс", reply_markup=classes_markup(f"adm_edit3:{type}"))
+
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adm_edit2:"))
+def main(call):
+    type, userClass = call.data.split(":")
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, "Выберите предмет", reply_markup=dictToMarkupI(f"adm_edit3:{type}:{userClass}", lessonsData["subjects"]))
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adm_edit3:l"))
+def main(call):
+    userClass, subject = call.data.split(":")[2:4]
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    bot.send_message(call.message.chat.id, "С чем хотите работать?", reply_markup=dictToMarkupI(f"adm_edit4:l:{userClass}:{subject}", {"t": "Темы", "l":"Уроки"}))
+
+@bot.callback_query_handler(func=lambda callback: callback.data.startswith("adm_edit4:l:") and callback.data[-1] == "t")
+def main(call):
+    userClass, subject = call.data.split(":")[2:4]
+    bot.delete_message(call.message.chat.id, call.message.message_id)
+    text = f"Темы по предмету {lessonsData['subjects'][subject]}:\n\n"
+    data = lessonsData["lessons"]["themes"][f"{userClass}classThemes"]
+    for el in data:
+        text += f"{el}\nУроки: {data[el]['list']}\tid: {data[el]['id']}"
+    bot.send_message(call.message.chat.id, text, reply_markup=adm_edit_l_t_markup)
+
+
+
+
+
+#bot
 @bot.message_handler(commands=['class'])
 def main(message):
     info = "Твой класс:\n\n"
@@ -820,7 +1156,9 @@ def exam(call):
         save_data()
         return
     questionGroupId = random.choice(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["exams"][examID]["types"][examType])
-    questionId = str(random.randint(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId])))
+    questionId = "info"
+    while questionId == "info":
+        questionId = str(random.randint(1, len(lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId])))
     examQType = lessonsData["exams"][f"{userClass}class"]["subjects"][subject]["questions"][questionGroupId][questionId]["type"]
     if examQType == 3:
         examQType = random.randint(1, 2)
@@ -1026,9 +1364,9 @@ def tests_list_subject(call):
     btn = types.InlineKeyboardButton("Назад", callback_data="tests_list")
     markup.add(btn)
     for el in lessonsData["tests"]["themes"][f"{userClass}classThemes"]:
-        if lessonsData["lessons"]["themes"][f"{userClass}classThemes"][el]["subject"] == subject:
+        if lessonsData["tests"]["themes"][f"{userClass}classThemes"][el]["subject"] == subject:
             if проверка_на_то_пройдены_ли_все_тесты_темы(userClass, message.chat.id, el):
-                btn = types.InlineKeyboardButton(el, callback_data=f"tests_theme_list:{subject}:{userClass}:{lessonsData['lessons']['themes'][f'{userClass}classThemes'][el]['id']}")
+                btn = types.InlineKeyboardButton(el, callback_data=f"tests_theme_list:{subject}:{userClass}:{lessonsData['tests']['themes'][f'{userClass}classThemes'][el]['id']}")
                 markup.add(btn)
     bot.edit_message_text(chat_id=message.chat.id, message_id=message.message_id, text="Выбери тему",reply_markup=markup)
 def tests_theme_list_p(userClass,id):
@@ -2401,7 +2739,7 @@ def run_bot():
     print("бот запущен...")
     delOldDz()
     #delTempSchools()
-    bot.send_message(config.ADMIN_ID, "Бот запущен")
+    #bot.send_message(config.ADMIN_ID, "Бот запущен")
     bot.polling(none_stop=True)
 
 if __name__ == "__main__":
